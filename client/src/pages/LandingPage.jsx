@@ -1,23 +1,20 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom'; // 👈 ¡NUEVO! Para leer el slug de la URL
+import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
 
-// --- 📅 CONFIGURACIÓN GLOBAL ---
-const MUSIC_URL = '/music/cancion.mp3'; 
-const PAPER_SOUND_URL = '/music/paper.mp3'; 
+const MUSIC_URL = '/music/cancion.mp3';
+const PAPER_SOUND_URL = '/music/paper.mp3';
 const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api`;
 
-// --- ESTILOS & RECURSOS ---
 const BLACK_TEXTURE = "bg-[url('https://www.transparenttextures.com/patterns/black-linen.png')]";
-const PAPER_TEXTURE = "bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')]"; 
+const PAPER_TEXTURE = "bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')]";
 
-// --- ESTILOS DINÁMICOS (CRISTAL Y ORO MEJORADOS) ---
 const getStyles = (isDark) => ({
-    bg: isDark ? `bg-[#050505] ${BLACK_TEXTURE}` : `bg-[#F9F7F2] ${PAPER_TEXTURE}`, 
-    textPrimary: isDark ? "text-[#FDFBF7]" : "text-[#111111]", 
-    textSecondary: isDark ? "text-[#C5A059]" : "text-[#9E7A32]", 
-    glassBox: isDark 
-        ? "bg-[#0a0a0a]/50 backdrop-blur-[30px] border border-t-white/10 border-l-white/10 border-b-[#C5A059]/20 border-r-[#C5A059]/20 shadow-[0_20px_50px_rgba(0,0,0,0.7),inset_0_0_20px_rgba(197,160,89,0.05)]" 
+    bg: isDark ? `bg-[#050505] ${BLACK_TEXTURE}` : `bg-[#F9F7F2] ${PAPER_TEXTURE}`,
+    textPrimary: isDark ? "text-[#FDFBF7]" : "text-[#111111]",
+    textSecondary: isDark ? "text-[#C5A059]" : "text-[#9E7A32]",
+    glassBox: isDark
+        ? "bg-[#0a0a0a]/50 backdrop-blur-[30px] border border-t-white/10 border-l-white/10 border-b-[#C5A059]/20 border-r-[#C5A059]/20 shadow-[0_20px_50px_rgba(0,0,0,0.7),inset_0_0_20px_rgba(197,160,89,0.05)]"
         : "bg-[#FFFFFF]/50 backdrop-blur-[30px] border border-t-white/60 border-l-white/60 border-b-[#9E7A32]/20 border-r-[#9E7A32]/20 shadow-[0_20px_50px_rgba(158,122,50,0.1),inset_0_0_20px_rgba(255,255,255,0.5)]",
     goldGradient: isDark
         ? "bg-clip-text text-transparent bg-gradient-to-r from-[#D4AF37] via-[#FFF3CC] to-[#AA7C11] drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]"
@@ -28,24 +25,23 @@ const getStyles = (isDark) => ({
     innerCard: isDark
         ? "bg-[#050505]/80 backdrop-blur-md border border-[#C5A059]/20"
         : "bg-[#FDFBF7]/90 backdrop-blur-md border border-[#9E7A32]/20",
-    envelopeBase: isDark ? `bg-[#0A0A0A] border-[#1a1a1a] ${BLACK_TEXTURE} opacity-90` : `bg-[#EAE6DE] border-[#D4AF37]/30 ${PAPER_TEXTURE}`, 
-    envelopeFlapSide: isDark ? `bg-[#111] border-[#222] ${BLACK_TEXTURE}` : `bg-[#E0DCD4] border-[#D4AF37]/20 ${PAPER_TEXTURE}`, 
-    envelopeFlapBottom: isDark ? `bg-[#141414] border-[#222] ${BLACK_TEXTURE}` : `bg-[#D6D1C7] border-[#D4AF37]/20 ${PAPER_TEXTURE}`, 
-    envelopeFlapTop: isDark ? `bg-[#1A1A1A] border-[#333] ${BLACK_TEXTURE}` : `bg-[#EAE6DE] border-[#D4AF37]/30 ${PAPER_TEXTURE}`, 
-    envelopeShadow: isDark ? "shadow-[0_-10px_40px_rgba(0,0,0,0.9)]" : "shadow-[0_-5px_25px_rgba(184,134,11,0.15)]" 
+    envelopeBase: isDark ? `bg-[#0A0A0A] border-[#1a1a1a] ${BLACK_TEXTURE} opacity-90` : `bg-[#EAE6DE] border-[#D4AF37]/30 ${PAPER_TEXTURE}`,
+    envelopeFlapSide: isDark ? `bg-[#111] border-[#222] ${BLACK_TEXTURE}` : `bg-[#E0DCD4] border-[#D4AF37]/20 ${PAPER_TEXTURE}`,
+    envelopeFlapBottom: isDark ? `bg-[#141414] border-[#222] ${BLACK_TEXTURE}` : `bg-[#D6D1C7] border-[#D4AF37]/20 ${PAPER_TEXTURE}`,
+    envelopeFlapTop: isDark ? `bg-[#1A1A1A] border-[#333] ${BLACK_TEXTURE}` : `bg-[#EAE6DE] border-[#D4AF37]/30 ${PAPER_TEXTURE}`,
+    envelopeShadow: isDark ? "shadow-[0_-10px_40px_rgba(0,0,0,0.9)]" : "shadow-[0_-5px_25px_rgba(184,134,11,0.15)]"
 });
 
-// --- ANIMATION VARIANTS ---
 const containerStagger = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.1 } }
 };
+
 const fadeInUp = {
     hidden: { y: 50, opacity: 0, filter: "blur(5px)" },
     visible: { y: 0, opacity: 1, filter: "blur(0px)", transition: { duration: 1.2, ease: [0.16, 1, 0.3, 1] } }
 };
 
-// --- COMPONENTES AUXILIARES ---
 export const GoldenParticles = ({ isDark }) => {
     const particles = Array.from({ length: 40 });
     return (
@@ -72,7 +68,7 @@ export const useSmartAudio = (url) => {
     useEffect(() => {
         audioRef.current = new Audio(url);
         audioRef.current.loop = true;
-        audioRef.current.volume = 0; 
+        audioRef.current.volume = 0;
 
         const handleVisibility = () => {
             if (document.hidden) {
@@ -86,8 +82,8 @@ export const useSmartAudio = (url) => {
         document.addEventListener('visibilitychange', handleVisibility);
         return () => {
             document.removeEventListener('visibilitychange', handleVisibility);
-            if(fadeInterval.current) clearInterval(fadeInterval.current);
-            if(audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+            if (fadeInterval.current) clearInterval(fadeInterval.current);
+            if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         };
     }, [url]);
 
@@ -124,8 +120,14 @@ export const FloatingControls = ({ playing, toggleAudio, isDark, toggleTheme }) 
         <button onClick={() => toggleAudio(!playing)} className={`backdrop-blur-2xl border border-white/20 p-3 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:scale-105 active:scale-95 transition-all duration-300 group ${isDark ? 'bg-black/40' : 'bg-white/40'}`}>
             <div className="flex items-center justify-center w-4 h-4 gap-[3px]">
                 {playing ? (
-                    <><motion.div animate={{ height: [4, 16, 4] }} transition={{ repeat: Infinity, duration: 1, ease: "easeInOut" }} className={`w-[2px] rounded-full ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#9E7A32]'}`} /><motion.div animate={{ height: [4, 20, 4] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.2, ease: "easeInOut" }} className={`w-[2px] rounded-full ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#9E7A32]'}`} /><motion.div animate={{ height: [4, 12, 4] }} transition={{ repeat: Infinity, duration: 0.8, delay: 0.4, ease: "easeInOut" }} className={`w-[2px] rounded-full ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#9E7A32]'}`} /></>
-                ) : ( <span className={`text-xs ml-[2px] drop-shadow-md ${isDark ? 'text-[#FCF6BA]' : 'text-[#9E7A32]'}`}>▶</span> )}
+                    <>
+                        <motion.div animate={{ height: [4, 16, 4] }} transition={{ repeat: Infinity, duration: 1, ease: "easeInOut" }} className={`w-[2px] rounded-full ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#9E7A32]'}`} />
+                        <motion.div animate={{ height: [4, 20, 4] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.2, ease: "easeInOut" }} className={`w-[2px] rounded-full ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#9E7A32]'}`} />
+                        <motion.div animate={{ height: [4, 12, 4] }} transition={{ repeat: Infinity, duration: 0.8, delay: 0.4, ease: "easeInOut" }} className={`w-[2px] rounded-full ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#9E7A32]'}`} />
+                    </>
+                ) : ( 
+                    <span className={`text-xs ml-[2px] drop-shadow-md ${isDark ? 'text-[#FCF6BA]' : 'text-[#9E7A32]'}`}>▶</span> 
+                )}
             </div>
         </button>
     </div>
@@ -137,7 +139,7 @@ export const Divider = ({ text, isDark }) => {
         <motion.div initial={{opacity: 0, scale: 0.95}} whileInView={{opacity: 1, scale: 1}} viewport={{once:true}} transition={{duration: 1.5, ease: "easeOut"}} className="py-20 flex flex-col items-center justify-center relative z-20">
             <div className="flex items-center gap-6 w-full justify-center px-4">
                 <motion.div initial={{scaleX: 0}} whileInView={{scaleX: 1}} viewport={{once:true}} transition={{duration: 1.5, ease: "easeInOut"}} className={`h-[1px] w-full max-w-[150px] bg-gradient-to-r ${styles.dividerLine} origin-right rounded-full`}></motion.div>
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} className={`flex items-center justify-center`}>
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} className="flex items-center justify-center">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`${isDark ? 'text-[#C5A059]' : 'text-[#9E7A32]'} opacity-80`}>
                         <path d="M12 2L13.5 9.5L21 11L13.5 12.5L12 20L10.5 12.5L3 11L10.5 9.5L12 2Z" fill="currentColor"/>
                     </svg>
@@ -155,18 +157,16 @@ export const Divider = ({ text, isDark }) => {
 
 export const ElegantDivider = ({ isDark }) => (
     <div className="w-full flex items-center justify-center py-20 px-6 opacity-70 z-20 relative">
-        <div className={`flex-grow h-[1px] bg-gradient-to-r from-transparent via-[#C5A059] to-transparent max-w-[200px]`}></div>
+        <div className="flex-grow h-[1px] bg-gradient-to-r from-transparent via-[#C5A059] to-transparent max-w-[200px]"></div>
         <div className="mx-8 flex gap-3 items-center">
             <div className={`w-1.5 h-1.5 rotate-45 ${isDark ? 'bg-[#C5A059]' : 'bg-[#9E7A32]'}`}></div>
             <div className={`w-2 h-2 rotate-45 ${isDark ? 'bg-[#FCF6BA]' : 'bg-[#D4AF37]'} shadow-[0_0_8px_rgba(252,246,186,0.6)]`}></div>
             <div className={`w-1.5 h-1.5 rotate-45 ${isDark ? 'bg-[#C5A059]' : 'bg-[#9E7A32]'}`}></div>
         </div>
-        <div className={`flex-grow h-[1px] bg-gradient-to-l from-transparent via-[#C5A059] to-transparent max-w-[200px]`}></div>
+        <div className="flex-grow h-[1px] bg-gradient-to-l from-transparent via-[#C5A059] to-transparent max-w-[200px]"></div>
     </div>
 );
 
-// --- 📅 CALENDARIO Y CUENTA REGRESIVA ---
-// ¡NUEVO! Ahora recibe targetDate dinámicamente como Prop
 const CalendarCard = ({ isDark = false, targetDate }) => {
   const styles = getStyles(isDark);
   const eventDate = new Date(targetDate || new Date());
@@ -183,7 +183,7 @@ const CalendarCard = ({ isDark = false, targetDate }) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
-    if(!targetDate) return;
+    if (!targetDate) return;
     const update = () => {
       const diff = +new Date(targetDate) - +new Date();
       if (diff > 0) {
@@ -316,7 +316,6 @@ const SongRequest = ({ isDark, slug }) => {
         if (!song.trim()) return;
         try {
             setStatus("sending");
-            // Agregamos el slug para guardar la petición en la boda correcta
             const response = await fetch(`${API_URL}/requests`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -418,14 +417,10 @@ const GuestBookSlider = ({ isDark, messages = [], playing, setPlaying }) => {
     );
 };
 
-// =====================================================================
-// LANDING PAGE PRINCIPAL DINÁMICA
-// =====================================================================
 const LandingPage = ({ onStart, onAdminLogin }) => {
-    const { slug } = useParams(); // 👈 LECTURA DE LA URL DINÁMICA
-    const [weddingData, setWeddingData] = useState(null); // 👈 ESTADO PARA LOS DATOS DE LA BODA
+    const { slug } = useParams();
+    const [weddingData, setWeddingData] = useState(null);
     const [loading, setLoading] = useState(true);
-
     const [step, setStep] = useState(0); 
     const [playing, setPlaying] = useSmartAudio(MUSIC_URL);
     const [realMessages, setRealMessages] = useState([]);
@@ -440,12 +435,9 @@ const LandingPage = ({ onStart, onAdminLogin }) => {
 
     useEffect(() => { localStorage.setItem('weddingTheme', JSON.stringify(isDark)); }, [isDark]);
 
-    // 👈 NUEVO: CARGAR DATOS BASADOS EN EL SLUG
     useEffect(() => {
         const fetchWeddingData = async () => {
             try {
-                // Aquí en el futuro harás: const res = await fetch(`${API_URL}/bodas/${slug}`);
-                // Por ahora usamos datos simulados para que veas cómo funciona
                 setTimeout(() => {
                     const partesSlug = slug ? slug.split('-') : ["Novio", "y", "Novia", "2026"];
                     const novio = partesSlug[0] ? partesSlug[0].charAt(0).toUpperCase() + partesSlug[0].slice(1) : "Novio";
@@ -455,7 +447,7 @@ const LandingPage = ({ onStart, onAdminLogin }) => {
                         novio: novio,
                         novia: novia,
                         iniciales: `${novio.charAt(0)}&${novia.charAt(0)}`,
-                        fecha: "2026-07-18T19:00:00-06:00", // Dinámico desde tu DB
+                        fecha: "2026-07-18T19:00:00-06:00",
                         fechaHero: "18 de Julio, 2026",
                         fechaCorta: "18 . 07 . 2026",
                         lugar: "Campeche, México",
@@ -464,7 +456,7 @@ const LandingPage = ({ onStart, onAdminLogin }) => {
                         padresNovia: ["Sr. José Ruben Canales Cruz", "Sra. María del Carmen Mendoza Rodríguez"]
                     });
                     setLoading(false);
-                }, 800); // Simulando carga de base de datos
+                }, 800);
             } catch (error) {
                 console.error("Error loading wedding:", error);
                 setLoading(false);
@@ -473,7 +465,6 @@ const LandingPage = ({ onStart, onAdminLogin }) => {
 
         const fetchMessages = async () => {
             try {
-                // Pasamos el slug al backend para traer solo los mensajes de ESTA boda
                 const response = await fetch(`${API_URL}/families/messages?slug=${slug}`); 
                 if (response.ok) {
                     const data = await response.json();
@@ -498,7 +489,6 @@ const LandingPage = ({ onStart, onAdminLogin }) => {
         setTimeout(() => setStep(2), 2800); 
     };
 
-    // Pantalla de Carga
     if (loading || !weddingData) {
         return (
             <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#050505]' : 'bg-[#F9F7F2]'}`}>
@@ -631,7 +621,7 @@ const LandingPage = ({ onStart, onAdminLogin }) => {
                     <ElegantDivider isDark={isDark} />
 
                     <section className="relative group py-24 mt-12">
-                        <div className="h-[600px] md:h-[800px] w-full overflow-hidden relative rounded-[3rem] mx-4 md:mx-8 w-[calc(100%-2rem)] md:w-[calc(100%-4rem)] shadow-[0_30px_60px_rgba(0,0,0,0.5)] border border-white/10">
+                        <div className="relative h-[600px] w-[calc(100%-2rem)] mx-4 overflow-hidden rounded-[3rem] border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.5)] md:h-[800px] md:w-[calc(100%-4rem)] md:mx-8">
                             <motion.img initial={{ scale: 1.15, y: -50 }} whileInView={{ scale: 1, y: 0 }} transition={{ duration: 20, ease: "linear" }} src="/photos/hero.jpg" className="w-full h-full object-cover opacity-70 grayscale brightness-75" />
                             <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? 'from-[#0a0a0a] via-transparent to-[#0a0a0a]/30' : 'from-[#F9F7F2] via-transparent to-[#F9F7F2]/30'}`}></div>
                         </div>
