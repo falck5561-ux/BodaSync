@@ -7035,3 +7035,15 @@
     margin-bottom: 25px !important;
   }
 }
+
+/* =========================================================
+   OCULTAR ICONOS "i" DE AYUDA
+========================================================= */
+
+.sections-help-icon {
+  display: none !important;
+}
+
+.sections-help-card {
+  align-items: flex-start;
+}

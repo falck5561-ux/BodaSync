@@ -9,11 +9,13 @@ const locationSchema = new Schema(
       trim: true,
       default: ''
     },
+
     venueAddress: {
       type: String,
       trim: true,
       default: ''
     },
+
     mapsUrl: {
       type: String,
       trim: true,
@@ -32,16 +34,19 @@ const parentsSchema = new Schema(
       trim: true,
       default: ''
     },
+
     groomMother: {
       type: String,
       trim: true,
       default: ''
     },
+
     brideFather: {
       type: String,
       trim: true,
       default: ''
     },
+
     brideMother: {
       type: String,
       trim: true,
@@ -60,6 +65,7 @@ const storySchema = new Schema(
       trim: true,
       default: ''
     },
+
     text: {
       type: String,
       trim: true,
@@ -78,16 +84,19 @@ const dressCodeSchema = new Schema(
       trim: true,
       default: ''
     },
+
     women: {
       type: String,
       trim: true,
       default: ''
     },
+
     men: {
       type: String,
       trim: true,
       default: ''
     },
+
     notes: {
       type: String,
       trim: true,
@@ -106,21 +115,25 @@ const giftsSchema = new Schema(
       trim: true,
       default: ''
     },
+
     bankName: {
       type: String,
       trim: true,
       default: ''
     },
+
     accountHolder: {
       type: String,
       trim: true,
       default: ''
     },
+
     accountNumber: {
       type: String,
       trim: true,
       default: ''
     },
+
     clabe: {
       type: String,
       trim: true,
@@ -151,42 +164,52 @@ const sectionsSchema = new Schema(
       type: Boolean,
       default: true
     },
+
     calendar: {
       type: Boolean,
       default: true
     },
+
     parents: {
       type: Boolean,
       default: true
     },
+
     story: {
       type: Boolean,
       default: true
     },
+
     gallery: {
       type: Boolean,
       default: true
     },
+
     itinerary: {
       type: Boolean,
       default: true
     },
+
     location: {
       type: Boolean,
       default: true
     },
+
     dressCode: {
       type: Boolean,
       default: true
     },
+
     gifts: {
       type: Boolean,
       default: true
     },
+
     music: {
       type: Boolean,
       default: true
     },
+
     guestBook: {
       type: Boolean,
       default: true
@@ -204,21 +227,25 @@ const itineraryItemSchema = new Schema(
       min: 1,
       default: 1
     },
+
     time: {
       type: String,
       trim: true,
       default: ''
     },
+
     title: {
       type: String,
       trim: true,
       default: ''
     },
+
     description: {
       type: String,
       trim: true,
       default: ''
     },
+
     location: {
       type: String,
       trim: true,
@@ -237,20 +264,41 @@ const themeSchema = new Schema(
       trim: true,
       default: '#9b7b6b'
     },
+
     secondaryColor: {
       type: String,
       trim: true,
       default: '#d6b89c'
     },
+
     backgroundColor: {
       type: String,
       trim: true,
       default: '#fffaf6'
     },
+
     textColor: {
       type: String,
       trim: true,
       default: '#2f2925'
+    },
+
+    /*
+     * Tema inicial de la invitación.
+     */
+    mode: {
+      type: String,
+      enum: ['light', 'dark'],
+      default: 'light'
+    },
+
+    /*
+     * Permite mostrar u ocultar el cambio de tema
+     * dentro de la invitación pública.
+     */
+    allowThemeToggle: {
+      type: Boolean,
+      default: true
     }
   },
   {
@@ -265,16 +313,32 @@ const mediaSchema = new Schema(
       trim: true,
       default: ''
     },
+
     coupleImage: {
       type: String,
       trim: true,
       default: ''
     },
+
+    /*
+     * Campo principal actual para la música.
+     */
+    musicUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+
+    /*
+     * Se conserva para compatibilidad con
+     * invitaciones/código anteriores.
+     */
     backgroundMusic: {
       type: String,
       trim: true,
       default: ''
     },
+
     gallery: {
       type: [
         {
@@ -282,12 +346,19 @@ const mediaSchema = new Schema(
           trim: true
         }
       ],
+
       default: [],
+
       validate: {
         validator(value) {
-          return Array.isArray(value) && value.length <= 8;
+          return (
+            Array.isArray(value) &&
+            value.length <= 8
+          );
         },
-        message: 'La galería admite un máximo de 8 imágenes.'
+
+        message:
+          'La galería admite un máximo de 8 imágenes.'
       }
     }
   },
@@ -384,7 +455,10 @@ const weddingSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['draft', 'published'],
+      enum: [
+        'draft',
+        'published'
+      ],
       default: 'published'
     }
   },
@@ -398,4 +472,7 @@ weddingSchema.index({
   createdAt: -1
 });
 
-module.exports = mongoose.model('Wedding', weddingSchema);
+module.exports = mongoose.model(
+  'Wedding',
+  weddingSchema
+);

@@ -36,19 +36,29 @@ export class WeddingServiceError extends Error {
     this.name = 'WeddingServiceError';
 
     this.status = options.status || 0;
+
     this.code =
       options.code || 'WEDDING_SERVICE_ERROR';
 
-    this.details = options.details || null;
+    this.details =
+      options.details || null;
   }
 }
+
+/*
+ * =========================================================
+ * RESPUESTAS HTTP
+ * =========================================================
+ */
 
 async function parseResponse(response) {
   const contentType =
     response.headers.get('content-type') || '';
 
   if (
-    contentType.includes('application/json')
+    contentType.includes(
+      'application/json'
+    )
   ) {
     try {
       return await response.json();
@@ -58,7 +68,8 @@ async function parseResponse(response) {
   }
 
   try {
-    const text = await response.text();
+    const text =
+      await response.text();
 
     return text || null;
   } catch {
@@ -115,13 +126,14 @@ async function request(
   };
 
   /*
-   * Si enviamos FormData, NO debemos poner
-   * Content-Type manualmente.
+   * Cuando mandamos FormData NO debemos
+   * escribir Content-Type manualmente.
    *
-   * El navegador agrega automáticamente:
+   * El navegador genera:
    *
    * multipart/form-data; boundary=...
    */
+
   if (
     body !== undefined &&
     body !== null &&
@@ -152,7 +164,9 @@ async function request(
       }
     );
   } catch (error) {
-    if (error?.name === 'AbortError') {
+    if (
+      error?.name === 'AbortError'
+    ) {
       throw error;
     }
 
@@ -165,7 +179,8 @@ async function request(
     );
   }
 
-  const data = await parseResponse(response);
+  const data =
+    await parseResponse(response);
 
   if (!response.ok) {
     let fallbackMessage =
@@ -212,7 +227,15 @@ async function request(
   return data;
 }
 
-function getFileFromMediaItem(mediaItem) {
+/*
+ * =========================================================
+ * HELPERS DE MULTIMEDIA
+ * =========================================================
+ */
+
+function getFileFromMediaItem(
+  mediaItem
+) {
   if (!mediaItem) {
     return null;
   }
@@ -248,8 +271,40 @@ function getFileFromMediaItem(mediaItem) {
   return null;
 }
 
-function hasFilesInFormData(formData) {
-  for (const [, value] of formData.entries()) {
+function getUrlFromMediaItem(
+  mediaItem
+) {
+  if (!mediaItem) {
+    return '';
+  }
+
+  if (typeof mediaItem === 'string') {
+    return cleanText(mediaItem);
+  }
+
+  if (
+    typeof mediaItem === 'object'
+  ) {
+    return cleanText(
+      mediaItem.url ||
+        mediaItem.secureUrl ||
+        mediaItem.secure_url ||
+        mediaItem.fileUrl ||
+        mediaItem.path ||
+        ''
+    );
+  }
+
+  return '';
+}
+
+function hasFilesInFormData(
+  formData
+) {
+  for (
+    const [, value]
+    of formData.entries()
+  ) {
     if (
       typeof File !== 'undefined' &&
       value instanceof File
@@ -268,7 +323,32 @@ function hasFilesInFormData(formData) {
   return false;
 }
 
-function normalizeUploadedMedia(response) {
+/*
+ * =========================================================
+ * NORMALIZAR MEDIA DEL SERVIDOR
+ * =========================================================
+ *
+ * Acepta distintas estructuras:
+ *
+ * {
+ *   media: {...}
+ * }
+ *
+ * {
+ *   data: {
+ *     media: {...}
+ *   }
+ * }
+ *
+ * {
+ *   coverImage: "...",
+ *   musicUrl: "..."
+ * }
+ */
+
+function normalizeUploadedMedia(
+  response
+) {
   const source =
     response?.media ||
     response?.data?.media ||
@@ -281,31 +361,60 @@ function normalizeUploadedMedia(response) {
     typeof source !== 'object' ||
     Array.isArray(source)
   ) {
-    return {};
+    return {
+      coverImage: '',
+      coupleImage: '',
+      backgroundMusic: '',
+      musicUrl: '',
+      gallery: []
+    };
   }
 
-  const gallerySource = Array.isArray(
-    source.gallery
-  )
-    ? source.gallery
-    : [];
+  const coverImage =
+    cleanText(
+      source.coverImage ||
+        source.heroImage ||
+        source.cover ||
+        ''
+    );
 
-  return {
-    coverImage:
-      cleanText(source.coverImage) ||
-      '',
+  const coupleImage =
+    cleanText(
+      source.coupleImage ||
+        source.storyImage ||
+        source.couple ||
+        ''
+    );
 
-    coupleImage:
-      cleanText(source.coupleImage) ||
-      '',
+  /*
+   * Aceptamos tanto:
+   *
+   * backgroundMusic
+   * musicUrl
+   * music
+   */
 
-    backgroundMusic:
-      cleanText(source.backgroundMusic) ||
-      '',
+  const backgroundMusic =
+    cleanText(
+      source.backgroundMusic ||
+        source.musicUrl ||
+        source.music ||
+        ''
+    );
 
-    gallery: gallerySource
+  const gallerySource =
+    Array.isArray(source.gallery)
+      ? source.gallery
+      : Array.isArray(source.photos)
+        ? source.photos
+        : [];
+
+  const gallery =
+    gallerySource
       .map((item) => {
-        if (typeof item === 'string') {
+        if (
+          typeof item === 'string'
+        ) {
           return cleanText(item);
         }
 
@@ -317,37 +426,206 @@ function normalizeUploadedMedia(response) {
             item.url ||
               item.path ||
               item.secureUrl ||
-              item.secure_url
+              item.secure_url ||
+              item.fileUrl ||
+              ''
           );
         }
 
         return '';
       })
-      .filter(Boolean)
+      .filter(Boolean);
+
+  return {
+    coverImage,
+    coupleImage,
+
+    /*
+     * Conservamos ambos nombres.
+     *
+     * Esto facilita la compatibilidad entre
+     * admin, payload, servidor y LandingPage.
+     */
+
+    backgroundMusic,
+    musicUrl: backgroundMusic,
+
+    gallery
   };
 }
 
 /*
- * =====================================================
- * SUBIR FOTOGRAFÍAS Y MÚSICA
- * =====================================================
+ * =========================================================
+ * MEDIA YA EXISTENTE
+ * =========================================================
  *
- * Envía:
+ * Si el administrador ya contiene URLs en lugar
+ * de File, no debemos perderlas.
+ */
+
+function getExistingMediaUrls(
+  media = {}
+) {
+  const gallery =
+    Array.isArray(media.gallery)
+      ? media.gallery
+          .map((item) =>
+            getUrlFromMediaItem(item)
+          )
+          .filter(Boolean)
+          .slice(0, 8)
+      : [];
+
+  const backgroundMusic =
+    getUrlFromMediaItem(
+      media.backgroundMusic ||
+        media.musicUrl ||
+        media.music
+    );
+
+  return {
+    coverImage:
+      getUrlFromMediaItem(
+        media.coverImage
+      ),
+
+    coupleImage:
+      getUrlFromMediaItem(
+        media.coupleImage
+      ),
+
+    backgroundMusic,
+
+    musicUrl:
+      backgroundMusic,
+
+    gallery
+  };
+}
+
+/*
+ * =========================================================
+ * COMBINAR MEDIA
+ * =========================================================
+ *
+ * La media recién subida tiene prioridad.
+ *
+ * Si algún archivo no fue reemplazado,
+ * conservamos la URL previa.
+ */
+
+function mergeMedia(
+  existingMedia = {},
+  uploadedMedia = {}
+) {
+  const uploadedGallery =
+    Array.isArray(
+      uploadedMedia.gallery
+    )
+      ? uploadedMedia.gallery.filter(
+          Boolean
+        )
+      : [];
+
+  const existingGallery =
+    Array.isArray(
+      existingMedia.gallery
+    )
+      ? existingMedia.gallery.filter(
+          Boolean
+        )
+      : [];
+
+  const backgroundMusic =
+    cleanText(
+      uploadedMedia.backgroundMusic ||
+        uploadedMedia.musicUrl ||
+        existingMedia.backgroundMusic ||
+        existingMedia.musicUrl ||
+        ''
+    );
+
+  return {
+    coverImage:
+      cleanText(
+        uploadedMedia.coverImage
+      ) ||
+      cleanText(
+        existingMedia.coverImage
+      ),
+
+    coupleImage:
+      cleanText(
+        uploadedMedia.coupleImage
+      ) ||
+      cleanText(
+        existingMedia.coupleImage
+      ),
+
+    backgroundMusic,
+
+    musicUrl:
+      backgroundMusic,
+
+    gallery:
+      uploadedGallery.length > 0
+        ? uploadedGallery
+        : existingGallery
+  };
+}
+
+/*
+ * =========================================================
+ * SUBIR FOTOGRAFÍAS Y MÚSICA
+ * =========================================================
+ *
+ * Campos enviados:
  *
  * coverImage
  * coupleImage
  * gallery
  * backgroundMusic
  *
- * hacia:
+ * Endpoint:
  *
  * POST /api/uploads
+ *
+ * IMPORTANTE:
+ *
+ * Esta función devuelve:
+ *
+ * {
+ *   media: {
+ *     coverImage,
+ *     coupleImage,
+ *     backgroundMusic,
+ *     musicUrl,
+ *     gallery
+ *   }
+ * }
+ *
+ * porque useWeddingBuilder espera:
+ *
+ * uploadResponse.media
  */
+
 export async function uploadWeddingMedia(
   media = {},
   options = {}
 ) {
-  const formData = new FormData();
+  const formData =
+    new FormData();
+
+  /*
+   * Conservamos URLs que ya existan.
+   */
+
+  const existingMedia =
+    getExistingMediaUrls(media);
+
+  /*
+   * Archivos nuevos.
+   */
 
   const coverImage =
     getFileFromMediaItem(
@@ -361,7 +639,9 @@ export async function uploadWeddingMedia(
 
   const backgroundMusic =
     getFileFromMediaItem(
-      media.backgroundMusic
+      media.backgroundMusic ||
+        media.musicUrl ||
+        media.music
     );
 
   if (coverImage) {
@@ -385,11 +665,10 @@ export async function uploadWeddingMedia(
     );
   }
 
-  const gallery = Array.isArray(
-    media.gallery
-  )
-    ? media.gallery
-    : [];
+  const gallery =
+    Array.isArray(media.gallery)
+      ? media.gallery
+      : [];
 
   gallery
     .slice(0, 8)
@@ -408,37 +687,88 @@ export async function uploadWeddingMedia(
     });
 
   /*
-   * Si no hay archivos reales, no hacemos
-   * una petición vacía.
+   * =======================================================
+   * SIN ARCHIVOS NUEVOS
+   * =======================================================
+   *
+   * Antes devolvía:
+   *
+   * {
+   *   coverImage: '',
+   *   ...
+   * }
+   *
+   * pero useWeddingBuilder esperaba:
+   *
+   * uploadResponse.media
+   *
+   * Ahora devolvemos siempre la misma estructura.
    */
-  if (!hasFilesInFormData(formData)) {
+
+  if (
+    !hasFilesInFormData(formData)
+  ) {
     return {
-      coverImage: '',
-      coupleImage: '',
-      backgroundMusic: '',
-      gallery: []
+      media: existingMedia
     };
   }
 
-  const response = await request(
-    '/uploads',
-    {
-      method: 'POST',
-      body: formData,
-      signal: options.signal
-    }
-  );
+  /*
+   * =======================================================
+   * SUBIDA
+   * =======================================================
+   */
 
-  return normalizeUploadedMedia(
-    response
-  );
+  const response =
+    await request(
+      '/uploads',
+      {
+        method: 'POST',
+        body: formData,
+        signal: options.signal
+      }
+    );
+
+  const uploadedMedia =
+    normalizeUploadedMedia(
+      response
+    );
+
+  /*
+   * Si existe una URL anterior y determinado
+   * archivo no fue reemplazado, la conservamos.
+   */
+
+  const finalMedia =
+    mergeMedia(
+      existingMedia,
+      uploadedMedia
+    );
+
+  /*
+   * =======================================================
+   * ESTRUCTURA CORRECTA
+   * =======================================================
+   *
+   * useWeddingBuilder hace:
+   *
+   * uploadedMedia:
+   *   uploadResponse?.media || {}
+   *
+   * por eso DEBE existir .media.
+   */
+
+  return {
+    media: finalMedia
+  };
 }
 
 /*
- * =====================================================
+ * =========================================================
  * CREAR INVITACIÓN
- * =====================================================
+ * =========================================================
  */
+
 export async function createWedding(
   weddingData,
   options = {}
@@ -455,31 +785,39 @@ export async function createWedding(
     );
   }
 
-  return request('/weddings', {
-    method: 'POST',
-    body: weddingData,
-    signal: options.signal
-  });
+  return request(
+    '/weddings',
+    {
+      method: 'POST',
+      body: weddingData,
+      signal: options.signal
+    }
+  );
 }
 
 /*
- * =====================================================
+ * =========================================================
  * OBTENER TODAS LAS INVITACIONES
- * =====================================================
+ * =========================================================
  */
+
 export async function getWeddings(
   options = {}
 ) {
-  return request('/weddings', {
-    signal: options.signal
-  });
+  return request(
+    '/weddings',
+    {
+      signal: options.signal
+    }
+  );
 }
 
 /*
- * =====================================================
- * OBTENER UNA INVITACIÓN POR SLUG
- * =====================================================
+ * =========================================================
+ * OBTENER INVITACIÓN POR SLUG
+ * =========================================================
  */
+
 export async function getWeddingBySlug(
   slug,
   options = {}
@@ -507,10 +845,11 @@ export async function getWeddingBySlug(
 }
 
 /*
- * =====================================================
+ * =========================================================
  * ELIMINAR INVITACIÓN
- * =====================================================
+ * =========================================================
  */
+
 export async function deleteWedding(
   weddingId,
   options = {}
@@ -541,13 +880,22 @@ export async function deleteWedding(
 }
 
 /*
- * Alias para compatibilidad con código antiguo.
+ * =========================================================
+ * ALIASES DE COMPATIBILIDAD
+ * =========================================================
  */
+
 export const getAllWeddings =
   getWeddings;
 
 export const removeWedding =
   deleteWedding;
+
+/*
+ * =========================================================
+ * MENSAJE DE ERROR
+ * =========================================================
+ */
 
 export function getWeddingServiceErrorMessage(
   error
@@ -569,14 +917,22 @@ export function getWeddingServiceErrorMessage(
   return 'Ocurrió un problema al comunicarse con el servidor.';
 }
 
+/*
+ * =========================================================
+ * SERVICE
+ * =========================================================
+ */
+
 const weddingService = {
   API_BASE_URL,
 
   uploadWeddingMedia,
 
   createWedding,
+
   getWeddings,
   getAllWeddings,
+
   getWeddingBySlug,
 
   deleteWedding,

@@ -310,8 +310,37 @@ function normalizeTheme(theme) {
 
     textColor:
       cleanText(source.textColor) ||
-      '#2f2925'
+      '#2f2925',
+
+    mode:
+      source.mode === 'dark'
+        ? 'dark'
+        : 'light',
+
+    allowThemeToggle: cleanBoolean(
+      source.allowThemeToggle,
+      true
+    )
   };
+}
+
+function getMediaUrl(value) {
+  if (typeof value === 'string') {
+    return cleanText(value);
+  }
+
+  if (!isObject(value)) {
+    return '';
+  }
+
+  return cleanText(
+    value.url ||
+      value.secureUrl ||
+      value.secure_url ||
+      value.fileUrl ||
+      value.path ||
+      value.src
+  );
 }
 
 function normalizeMedia(media) {
@@ -325,35 +354,56 @@ function normalizeMedia(media) {
     ? source.gallery
     : Array.isArray(source.galleryUrls)
       ? source.galleryUrls
-      : Array.isArray(
-            source.galleryFileNames
-          )
+      : Array.isArray(source.galleryFileNames)
         ? source.galleryFileNames
-        : [];
+        : Array.isArray(source.photos)
+          ? source.photos
+          : [];
+
+  const coverImage = getMediaUrl(
+    source.coverImage ||
+      source.coverImageUrl ||
+      source.coverImageName ||
+      source.heroImage ||
+      source.cover
+  );
+
+  const coupleImage = getMediaUrl(
+    source.coupleImage ||
+      source.coupleImageUrl ||
+      source.coupleImageName ||
+      source.storyImage ||
+      source.couple
+  );
+
+  const musicUrl = getMediaUrl(
+    source.musicUrl ||
+      source.backgroundMusic ||
+      source.musicFileName ||
+      source.music
+  );
+
+  const gallery = gallerySource
+    .map((item) => getMediaUrl(item))
+    .filter(Boolean)
+    .slice(0, 8);
 
   return {
-    coverImage: cleanText(
-      source.coverImage ||
-        source.coverImageUrl ||
-        source.coverImageName
-    ),
+    coverImage,
+    coupleImage,
 
-    coupleImage: cleanText(
-      source.coupleImage ||
-        source.coupleImageUrl ||
-        source.coupleImageName
-    ),
+    /*
+     * Campo actual utilizado por la invitación.
+     */
+    musicUrl,
 
-    backgroundMusic: cleanText(
-      source.backgroundMusic ||
-        source.musicUrl ||
-        source.musicFileName
-    ),
+    /*
+     * Compatibilidad con versiones anteriores
+     * del administrador y de LandingPage.
+     */
+    backgroundMusic: musicUrl,
 
-    gallery: gallerySource
-      .map((item) => cleanText(item))
-      .filter(Boolean)
-      .slice(0, 8)
+    gallery
   };
 }
 

@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   createEmptyMedia,
@@ -16,13 +11,54 @@ import {
   validateMediaFile
 } from '../utils/mediaUtils';
 
+function getMediaSource(nextMedia = {}) {
+  if (
+    nextMedia?.media &&
+    typeof nextMedia.media === 'object' &&
+    !Array.isArray(nextMedia.media)
+  ) {
+    return nextMedia.media;
+  }
+
+  return nextMedia || {};
+}
+
+function getIncomingMusic(source = {}) {
+  return (
+    source.backgroundMusic ||
+    source.musicUrl ||
+    source.music ||
+    null
+  );
+}
+
+function normalizeIncomingGallery(source = {}) {
+  if (Array.isArray(source.gallery)) {
+    return source.gallery.filter(Boolean).slice(0, 8);
+  }
+
+  if (Array.isArray(source.photos)) {
+    return source.photos.filter(Boolean).slice(0, 8);
+  }
+
+  return [];
+}
+
 export default function useWeddingMedia({
   setError,
   setSuccessMessage
 } = {}) {
-  const [media, setMedia] = useState(
-    createEmptyMedia
-  );
+  const [media, setMedia] = useState(createEmptyMedia);
+
+  /*
+   * =======================================================
+   * REFERENCIA AL ESTADO MÁS RECIENTE
+   * =======================================================
+   *
+   * La usamos sobre todo al añadir varias imágenes.
+   * También la actualizamos dentro de cada setMedia para no
+   * depender de que useEffect haya terminado de ejecutarse.
+   */
 
   const latestMediaRef = useRef(media);
 
@@ -30,18 +66,35 @@ export default function useWeddingMedia({
     latestMediaRef.current = media;
   }, [media]);
 
+  /*
+   * =======================================================
+   * LIMPIEZA AL DESMONTAR
+   * =======================================================
+   *
+   * Los previews creados con URL.createObjectURL deben
+   * liberarse para evitar memoria retenida en el navegador.
+   */
+
   useEffect(() => {
     return () => {
-      revokeAllMediaUrls(
-        latestMediaRef.current
-      );
+      revokeAllMediaUrls(latestMediaRef.current);
     };
   }, []);
 
-  const galleryCount = media.gallery.length;
+  /*
+   * =======================================================
+   * CONTADORES
+   * =======================================================
+   */
+
+  const galleryCount = Array.isArray(media.gallery)
+    ? media.gallery.length
+    : 0;
 
   const selectedMediaCount = useMemo(() => {
-    let total = media.gallery.length;
+    let total = Array.isArray(media.gallery)
+      ? media.gallery.length
+      : 0;
 
     if (media.coverImage) {
       total += 1;
@@ -58,31 +111,38 @@ export default function useWeddingMedia({
     return total;
   }, [media]);
 
-  const hasCoverImage =
-    Boolean(media.coverImage);
+  const hasCoverImage = Boolean(media.coverImage);
 
-  const hasCoupleImage =
-    Boolean(media.coupleImage);
+  const hasCoupleImage = Boolean(media.coupleImage);
 
-  const hasBackgroundMusic =
-    Boolean(media.backgroundMusic);
+  const hasBackgroundMusic = Boolean(media.backgroundMusic);
 
   const hasGalleryImages =
+    Array.isArray(media.gallery) &&
     media.gallery.length > 0;
+
+  /*
+   * =======================================================
+   * NOMBRES DE ARCHIVOS
+   * =======================================================
+   */
 
   const mediaFileNames = useMemo(() => {
     return getMediaFileNames(media);
   }, [media]);
+
+  /*
+   * =======================================================
+   * MENSAJES
+   * =======================================================
+   */
 
   function clearMessages() {
     if (typeof setError === 'function') {
       setError('');
     }
 
-    if (
-      typeof setSuccessMessage ===
-      'function'
-    ) {
+    if (typeof setSuccessMessage === 'function') {
       setSuccessMessage('');
     }
   }
@@ -94,21 +154,46 @@ export default function useWeddingMedia({
   }
 
   function showSuccess(message) {
-    if (
-      typeof setSuccessMessage ===
-      'function'
-    ) {
+    if (typeof setSuccessMessage === 'function') {
       setSuccessMessage(message);
     }
   }
+
+  /*
+   * =======================================================
+   * ACTUALIZACIÓN SEGURA DEL ESTADO
+   * =======================================================
+   *
+   * Mantiene latestMediaRef sincronizado inmediatamente.
+   */
+
+  function updateMedia(updater) {
+    setMedia((currentMedia) => {
+      const nextMedia =
+        typeof updater === 'function'
+          ? updater(currentMedia)
+          : updater;
+
+      latestMediaRef.current = nextMedia;
+
+      return nextMedia;
+    });
+  }
+
+  /*
+   * =======================================================
+   * ARCHIVO INDIVIDUAL
+   * =======================================================
+   */
 
   function handleSingleMediaChange(
     event,
     mediaKey,
     acceptedType
   ) {
-    const file =
-      event.target.files?.[0];
+    const input = event?.target;
+
+    const file = input?.files?.[0];
 
     const allowedKeys = [
       'coverImage',
@@ -121,39 +206,47 @@ export default function useWeddingMedia({
         'El tipo de archivo seleccionado no es válido.'
       );
 
-      event.target.value = '';
+      if (input) {
+        input.value = '';
+      }
+
       return;
     }
 
-    const validation =
-      validateMediaFile(
-        file,
-        acceptedType
-      );
+    const validation = validateMediaFile(
+      file,
+      acceptedType
+    );
 
     if (!validation.valid) {
       showError(validation.error);
 
-      event.target.value = '';
+      if (input) {
+        input.value = '';
+      }
+
       return;
     }
 
-    const mediaItem =
-      createMediaItem(file);
+    const mediaItem = createMediaItem(file);
 
     if (!mediaItem) {
       showError(
-        'No fue posible preparar el archivo.'
+        'No fue posible preparar el archivo seleccionado.'
       );
 
-      event.target.value = '';
+      if (input) {
+        input.value = '';
+      }
+
       return;
     }
 
-    setMedia((currentMedia) => {
-      revokeMediaUrl(
-        currentMedia[mediaKey]
-      );
+    updateMedia((currentMedia) => {
+      /*
+       * Revocamos únicamente el preview anterior.
+       */
+      revokeMediaUrl(currentMedia[mediaKey]);
 
       return {
         ...currentMedia,
@@ -165,12 +258,20 @@ export default function useWeddingMedia({
 
     showSuccess(
       acceptedType === 'audio'
-        ? 'La canción fue seleccionada.'
-        : 'La imagen fue seleccionada.'
+        ? 'La canción fue seleccionada correctamente.'
+        : 'La imagen fue seleccionada correctamente.'
     );
 
-    event.target.value = '';
+    if (input) {
+      input.value = '';
+    }
   }
+
+  /*
+   * =======================================================
+   * PORTADA
+   * =======================================================
+   */
 
   function handleCoverImageChange(event) {
     handleSingleMediaChange(
@@ -180,6 +281,12 @@ export default function useWeddingMedia({
     );
   }
 
+  /*
+   * =======================================================
+   * FOTO DE PAREJA
+   * =======================================================
+   */
+
   function handleCoupleImageChange(event) {
     handleSingleMediaChange(
       event,
@@ -188,15 +295,25 @@ export default function useWeddingMedia({
     );
   }
 
-  function handleBackgroundMusicChange(
-    event
-  ) {
+  /*
+   * =======================================================
+   * MÚSICA
+   * =======================================================
+   */
+
+  function handleBackgroundMusicChange(event) {
     handleSingleMediaChange(
       event,
       'backgroundMusic',
       'audio'
     );
   }
+
+  /*
+   * =======================================================
+   * ELIMINAR ARCHIVO INDIVIDUAL
+   * =======================================================
+   */
 
   function removeSingleMedia(mediaKey) {
     const allowedKeys = [
@@ -209,10 +326,8 @@ export default function useWeddingMedia({
       return;
     }
 
-    setMedia((currentMedia) => {
-      revokeMediaUrl(
-        currentMedia[mediaKey]
-      );
+    updateMedia((currentMedia) => {
+      revokeMediaUrl(currentMedia[mediaKey]);
 
       return {
         ...currentMedia,
@@ -232,36 +347,46 @@ export default function useWeddingMedia({
   }
 
   function removeBackgroundMusic() {
-    removeSingleMedia(
-      'backgroundMusic'
-    );
+    removeSingleMedia('backgroundMusic');
   }
 
+  /*
+   * =======================================================
+   * GALERÍA
+   * =======================================================
+   */
+
   function handleGalleryChange(event) {
-    const files =
-      event.target.files;
+    const input = event?.target;
+
+    const files = input?.files;
 
     if (!files || files.length === 0) {
       return;
     }
 
-    const currentGallery =
-      latestMediaRef.current.gallery;
+    const currentGallery = Array.isArray(
+      latestMediaRef.current?.gallery
+    )
+      ? latestMediaRef.current.gallery
+      : [];
 
-    const result =
-      prepareGalleryFiles(
-        files,
-        currentGallery
-      );
+    const result = prepareGalleryFiles(
+      files,
+      currentGallery
+    );
 
     if (result.items.length > 0) {
-      setMedia((currentMedia) => ({
+      updateMedia((currentMedia) => ({
         ...currentMedia,
 
         gallery: [
-          ...currentMedia.gallery,
+          ...(Array.isArray(currentMedia.gallery)
+            ? currentMedia.gallery
+            : []),
+
           ...result.items
-        ]
+        ].slice(0, 8)
       }));
 
       clearMessages();
@@ -274,24 +399,32 @@ export default function useWeddingMedia({
     }
 
     if (result.errors.length > 0) {
-      showError(
-        result.errors.join(' ')
-      );
+      showError(result.errors.join(' '));
     }
 
-    event.target.value = '';
+    if (input) {
+      input.value = '';
+    }
   }
+
+  /*
+   * =======================================================
+   * ELIMINAR FOTO DE GALERÍA
+   * =======================================================
+   */
 
   function removeGalleryImage(imageId) {
     if (!imageId) {
       return;
     }
 
-    setMedia((currentMedia) => ({
+    updateMedia((currentMedia) => ({
       ...currentMedia,
 
       gallery: removeGalleryItem(
-        currentMedia.gallery,
+        Array.isArray(currentMedia.gallery)
+          ? currentMedia.gallery
+          : [],
         imageId
       )
     }));
@@ -299,27 +432,37 @@ export default function useWeddingMedia({
     clearMessages();
   }
 
+  /*
+   * =======================================================
+   * ORDEN DE GALERÍA
+   * =======================================================
+   */
+
   function moveGalleryImage(
     imageIndex,
     direction
   ) {
-    setMedia((currentMedia) => {
+    updateMedia((currentMedia) => {
+      const gallery = Array.isArray(
+        currentMedia.gallery
+      )
+        ? currentMedia.gallery
+        : [];
+
       const newIndex =
         imageIndex + direction;
 
       if (
         imageIndex < 0 ||
-        imageIndex >=
-          currentMedia.gallery.length ||
+        imageIndex >= gallery.length ||
         newIndex < 0 ||
-        newIndex >=
-          currentMedia.gallery.length
+        newIndex >= gallery.length
       ) {
         return currentMedia;
       }
 
       const updatedGallery = [
-        ...currentMedia.gallery
+        ...gallery
       ];
 
       const selectedImage =
@@ -338,29 +481,37 @@ export default function useWeddingMedia({
     });
   }
 
-  function moveGalleryImageUp(
-    imageIndex
-  ) {
+  function moveGalleryImageUp(imageIndex) {
     moveGalleryImage(
       imageIndex,
       -1
     );
   }
 
-  function moveGalleryImageDown(
-    imageIndex
-  ) {
+  function moveGalleryImageDown(imageIndex) {
     moveGalleryImage(
       imageIndex,
       1
     );
   }
 
+  /*
+   * =======================================================
+   * LIMPIAR GALERÍA
+   * =======================================================
+   */
+
   function clearGallery() {
-    setMedia((currentMedia) => {
-      currentMedia.gallery.forEach(
-        revokeMediaUrl
-      );
+    updateMedia((currentMedia) => {
+      const gallery = Array.isArray(
+        currentMedia.gallery
+      )
+        ? currentMedia.gallery
+        : [];
+
+      gallery.forEach((item) => {
+        revokeMediaUrl(item);
+      });
 
       return {
         ...currentMedia,
@@ -371,11 +522,15 @@ export default function useWeddingMedia({
     clearMessages();
   }
 
+  /*
+   * =======================================================
+   * LIMPIAR TODO
+   * =======================================================
+   */
+
   function clearMedia() {
-    setMedia((currentMedia) => {
-      revokeAllMediaUrls(
-        currentMedia
-      );
+    updateMedia((currentMedia) => {
+      revokeAllMediaUrls(currentMedia);
 
       return createEmptyMedia();
     });
@@ -383,34 +538,80 @@ export default function useWeddingMedia({
     clearMessages();
   }
 
-  function replaceMedia(
-    nextMedia = {}
-  ) {
-    setMedia((currentMedia) => {
-      revokeAllMediaUrls(
-        currentMedia
-      );
+  /*
+   * =======================================================
+   * REEMPLAZAR MULTIMEDIA
+   * =======================================================
+   *
+   * IMPORTANTE:
+   *
+   * Antes solamente reconocíamos:
+   *
+   * backgroundMusic
+   *
+   * Ahora también aceptamos:
+   *
+   * musicUrl
+   * music
+   *
+   * Así la música no desaparece si la información
+   * viene del formato nuevo del backend.
+   *
+   * También aceptamos:
+   *
+   * {
+   *   media: {...}
+   * }
+   *
+   * además del objeto multimedia directo.
+   */
 
-      return {
-        coverImage:
-          nextMedia.coverImage || null,
+  function replaceMedia(nextMedia = {}) {
+    const source =
+      getMediaSource(nextMedia);
 
-        coupleImage:
-          nextMedia.coupleImage || null,
+    const incomingMedia = {
+      coverImage:
+        source.coverImage ||
+        source.heroImage ||
+        source.cover ||
+        null,
 
-        backgroundMusic:
-          nextMedia.backgroundMusic ||
-          null,
+      coupleImage:
+        source.coupleImage ||
+        source.storyImage ||
+        source.couple ||
+        null,
 
-        gallery:
-          Array.isArray(
-            nextMedia.gallery
-          )
-            ? nextMedia.gallery
-            : []
-      };
+      backgroundMusic:
+        getIncomingMusic(source),
+
+      gallery:
+        normalizeIncomingGallery(
+          source
+        )
+    };
+
+    updateMedia((currentMedia) => {
+      revokeAllMediaUrls(currentMedia);
+
+      return incomingMedia;
     });
+
+    clearMessages();
   }
+
+  /*
+   * =======================================================
+   * PAYLOAD AUXILIAR
+   * =======================================================
+   *
+   * Este método se conserva por compatibilidad.
+   *
+   * La publicación real NO depende de este método.
+   * useWeddingBuilder envía directamente media a
+   * uploadWeddingMedia().
+   */
 
   function getMediaPayload() {
     return getMediaFileNames(media);

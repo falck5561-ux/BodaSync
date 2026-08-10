@@ -4,6 +4,7 @@ export const MAX_GALLERY_IMAGES = 8;
 
 export const ACCEPTED_IMAGE_TYPES = [
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'image/webp'
 ];
@@ -13,17 +14,156 @@ export const ACCEPTED_AUDIO_TYPES = [
   'audio/mp3',
   'audio/wav',
   'audio/x-wav',
+  'audio/wave',
   'audio/mp4',
+  'audio/m4a',
   'audio/x-m4a',
   'audio/aac',
-  'audio/ogg'
+  'audio/x-aac',
+  'audio/ogg',
+  'application/ogg'
 ];
 
+const ACCEPTED_IMAGE_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp'
+];
+
+const ACCEPTED_AUDIO_EXTENSIONS = [
+  'mp3',
+  'wav',
+  'm4a',
+  'mp4',
+  'aac',
+  'ogg'
+];
+
+function cleanText(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+}
+
+function normalizeMimeType(value) {
+  return cleanText(value).toLowerCase();
+}
+
+function getFileExtension(file) {
+  const name = cleanText(file?.name);
+
+  if (!name || !name.includes('.')) {
+    return '';
+  }
+
+  return name
+    .split('.')
+    .pop()
+    .trim()
+    .toLowerCase();
+}
+
+function isBlobUrl(value) {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('blob:')
+  );
+}
+
+function getMediaItemFile(mediaItem) {
+  if (!mediaItem) {
+    return null;
+  }
+
+  if (
+    typeof File !== 'undefined' &&
+    mediaItem instanceof File
+  ) {
+    return mediaItem;
+  }
+
+  if (
+    typeof Blob !== 'undefined' &&
+    mediaItem instanceof Blob
+  ) {
+    return mediaItem;
+  }
+
+  if (
+    typeof File !== 'undefined' &&
+    mediaItem.file instanceof File
+  ) {
+    return mediaItem.file;
+  }
+
+  if (
+    typeof Blob !== 'undefined' &&
+    mediaItem.file instanceof Blob
+  ) {
+    return mediaItem.file;
+  }
+
+  return null;
+}
+
+export function getMediaItemUrl(mediaItem) {
+  if (!mediaItem) {
+    return '';
+  }
+
+  if (typeof mediaItem === 'string') {
+    return cleanText(mediaItem);
+  }
+
+  if (typeof mediaItem !== 'object') {
+    return '';
+  }
+
+  return cleanText(
+    mediaItem.previewUrl ||
+      mediaItem.preview ||
+      mediaItem.url ||
+      mediaItem.secureUrl ||
+      mediaItem.secure_url ||
+      mediaItem.fileUrl ||
+      mediaItem.path ||
+      mediaItem.src ||
+      ''
+  );
+}
+
+/*
+ * =========================================================
+ * IDENTIFICADORES
+ * =========================================================
+ */
+
 export function createMediaId() {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
+    return crypto.randomUUID();
+  }
+
   return `${Date.now()}-${Math.random()
     .toString(16)
     .slice(2)}`;
 }
+
+/*
+ * =========================================================
+ * ESTADO VACÍO
+ * =========================================================
+ *
+ * Dentro del constructor conservamos "backgroundMusic".
+ *
+ * Al publicar, weddingService + weddingPayload convierten
+ * este valor también a "musicUrl".
+ */
 
 export function createEmptyMedia() {
   return {
@@ -33,6 +173,12 @@ export function createEmptyMedia() {
     gallery: []
   };
 }
+
+/*
+ * =========================================================
+ * FORMATO DE TAMAÑO
+ * =========================================================
+ */
 
 export function formatFileSize(bytes) {
   if (
@@ -67,35 +213,94 @@ export function formatFileSize(bytes) {
     1024 ** unitIndex;
 
   return `${value.toFixed(
-    unitIndex === 0 ? 0 : 2
+    unitIndex === 0
+      ? 0
+      : 2
   )} ${units[unitIndex]}`;
 }
+
+/*
+ * =========================================================
+ * DETECCIÓN DE IMÁGENES
+ * =========================================================
+ *
+ * Algunos navegadores pueden entregar file.type vacío.
+ * Por eso comprobamos MIME y extensión.
+ */
 
 export function isImageFile(file) {
   if (!file) {
     return false;
   }
 
-  return (
-    file.type.startsWith('image/') &&
-    ACCEPTED_IMAGE_TYPES.includes(
+  const mimeType =
+    normalizeMimeType(
       file.type
+    );
+
+  const extension =
+    getFileExtension(file);
+
+  if (
+    mimeType &&
+    ACCEPTED_IMAGE_TYPES.includes(
+      mimeType
     )
+  ) {
+    return true;
+  }
+
+  return ACCEPTED_IMAGE_EXTENSIONS.includes(
+    extension
   );
 }
+
+/*
+ * =========================================================
+ * DETECCIÓN DE AUDIO
+ * =========================================================
+ *
+ * M4A es especialmente inconsistente entre navegadores.
+ * Puede llegar como:
+ *
+ * audio/mp4
+ * audio/m4a
+ * audio/x-m4a
+ * o incluso sin MIME.
+ */
 
 export function isAudioFile(file) {
   if (!file) {
     return false;
   }
 
-  return (
-    file.type.startsWith('audio/') &&
-    ACCEPTED_AUDIO_TYPES.includes(
+  const mimeType =
+    normalizeMimeType(
       file.type
+    );
+
+  const extension =
+    getFileExtension(file);
+
+  if (
+    mimeType &&
+    ACCEPTED_AUDIO_TYPES.includes(
+      mimeType
     )
+  ) {
+    return true;
+  }
+
+  return ACCEPTED_AUDIO_EXTENSIONS.includes(
+    extension
   );
 }
+
+/*
+ * =========================================================
+ * VALIDACIÓN
+ * =========================================================
+ */
 
 export function validateMediaFile(
   file,
@@ -114,11 +319,22 @@ export function validateMediaFile(
       return {
         valid: false,
         error:
-          'Selecciona una imagen JPG, PNG o WebP.'
+          'Selecciona una imagen JPG, JPEG, PNG o WebP.'
       };
     }
 
-    if (file.size > MAX_IMAGE_SIZE) {
+    if (file.size <= 0) {
+      return {
+        valid: false,
+        error:
+          'La imagen seleccionada está vacía.'
+      };
+    }
+
+    if (
+      file.size >
+      MAX_IMAGE_SIZE
+    ) {
       return {
         valid: false,
         error:
@@ -141,7 +357,18 @@ export function validateMediaFile(
       };
     }
 
-    if (file.size > MAX_AUDIO_SIZE) {
+    if (file.size <= 0) {
+      return {
+        valid: false,
+        error:
+          'La canción seleccionada está vacía.'
+      };
+    }
+
+    if (
+      file.size >
+      MAX_AUDIO_SIZE
+    ) {
       return {
         valid: false,
         error:
@@ -162,6 +389,12 @@ export function validateMediaFile(
   };
 }
 
+/*
+ * =========================================================
+ * PREVIEW LOCAL
+ * =========================================================
+ */
+
 export function createPreviewUrl(file) {
   if (
     !file ||
@@ -172,8 +405,27 @@ export function createPreviewUrl(file) {
     return '';
   }
 
-  return URL.createObjectURL(file);
+  try {
+    return URL.createObjectURL(
+      file
+    );
+  } catch {
+    return '';
+  }
 }
+
+/*
+ * =========================================================
+ * CREAR ITEM MULTIMEDIA
+ * =========================================================
+ *
+ * IMPORTANTE:
+ *
+ * Conservamos "file" completo.
+ *
+ * weddingService.js utiliza justamente item.file para mandar
+ * el archivo real mediante FormData.
+ */
 
 export function createMediaItem(
   file,
@@ -183,25 +435,70 @@ export function createMediaItem(
     return null;
   }
 
+  const previewUrl =
+    createPreviewUrl(file);
+
   return {
-    id: createMediaId(),
+    id:
+      createMediaId(),
+
     file,
-    name: file.name || 'Archivo',
-    type: file.type || '',
-    size: file.size || 0,
+
+    name:
+      cleanText(file.name) ||
+      'Archivo',
+
+    type:
+      normalizeMimeType(
+        file.type
+      ),
+
+    size:
+      Number.isFinite(
+        file.size
+      )
+        ? file.size
+        : 0,
+
     formattedSize:
-      formatFileSize(file.size || 0),
-    previewUrl:
-      createPreviewUrl(file),
+      formatFileSize(
+        Number.isFinite(
+          file.size
+        )
+          ? file.size
+          : 0
+      ),
+
+    previewUrl,
+
+    /*
+     * Alias útil para componentes que buscan "preview".
+     */
+    preview:
+      previewUrl,
+
+    /*
+     * Marca que ayuda a diferenciar un File todavía local
+     * de una URL que ya fue subida al servidor.
+     */
+    isLocal:
+      true,
+
     ...extraData
   };
 }
+
+/*
+ * =========================================================
+ * REVOCAR PREVIEW
+ * =========================================================
+ */
 
 export function revokeMediaUrl(
   mediaItem
 ) {
   if (
-    !mediaItem?.previewUrl ||
+    !mediaItem ||
     typeof URL === 'undefined' ||
     typeof URL.revokeObjectURL !==
       'function'
@@ -209,10 +506,38 @@ export function revokeMediaUrl(
     return;
   }
 
-  URL.revokeObjectURL(
-    mediaItem.previewUrl
-  );
+  const previewUrl =
+    typeof mediaItem === 'string'
+      ? mediaItem
+      : mediaItem.previewUrl ||
+        mediaItem.preview ||
+        '';
+
+  /*
+   * Nunca intentamos revocar una URL real del servidor.
+   *
+   * Solo URL.createObjectURL genera URLs blob:.
+   */
+
+  if (!isBlobUrl(previewUrl)) {
+    return;
+  }
+
+  try {
+    URL.revokeObjectURL(
+      previewUrl
+    );
+  } catch {
+    // No necesitamos bloquear el flujo
+    // si el navegador ya liberó el recurso.
+  }
 }
+
+/*
+ * =========================================================
+ * REVOCAR TODA LA MULTIMEDIA
+ * =========================================================
+ */
 
 export function revokeAllMediaUrls(
   media
@@ -230,15 +555,26 @@ export function revokeAllMediaUrls(
   );
 
   revokeMediaUrl(
-    media.backgroundMusic
+    media.backgroundMusic ||
+      media.musicUrl
   );
 
-  if (Array.isArray(media.gallery)) {
+  if (
+    Array.isArray(
+      media.gallery
+    )
+  ) {
     media.gallery.forEach(
       revokeMediaUrl
     );
   }
 }
+
+/*
+ * =========================================================
+ * ELIMINAR FOTO DE GALERÍA
+ * =========================================================
+ */
 
 export function removeGalleryItem(
   gallery,
@@ -249,18 +585,52 @@ export function removeGalleryItem(
   }
 
   const selectedImage =
-    gallery.find(
-      (image) =>
-        image.id === imageId
-    );
+    gallery.find((image) => {
+      if (!image) {
+        return false;
+      }
 
-  revokeMediaUrl(selectedImage);
+      if (
+        typeof image ===
+        'string'
+      ) {
+        return image === imageId;
+      }
+
+      return (
+        image.id === imageId
+      );
+    });
+
+  revokeMediaUrl(
+    selectedImage
+  );
 
   return gallery.filter(
-    (image) =>
-      image.id !== imageId
+    (image) => {
+      if (!image) {
+        return false;
+      }
+
+      if (
+        typeof image ===
+        'string'
+      ) {
+        return image !== imageId;
+      }
+
+      return (
+        image.id !== imageId
+      );
+    }
   );
 }
+
+/*
+ * =========================================================
+ * ESPACIOS DE GALERÍA
+ * =========================================================
+ */
 
 export function getAvailableGallerySpaces(
   gallery
@@ -276,6 +646,12 @@ export function getAvailableGallerySpaces(
     0
   );
 }
+
+/*
+ * =========================================================
+ * PREPARAR GALERÍA
+ * =========================================================
+ */
 
 export function prepareGalleryFiles(
   files,
@@ -307,35 +683,71 @@ export function prepareGalleryFiles(
   const items = [];
   const errors = [];
 
-  filesToProcess.forEach((file) => {
-    const validation =
-      validateMediaFile(
-        file,
-        'image'
+  /*
+   * Evita seleccionar exactamente el mismo archivo varias
+   * veces dentro de una sola carga.
+   */
+
+  const processedFiles =
+    new Set();
+
+  filesToProcess.forEach(
+    (file) => {
+      const signature = [
+        file.name,
+        file.size,
+        file.lastModified
+      ].join('-');
+
+      if (
+        processedFiles.has(
+          signature
+        )
+      ) {
+        errors.push(
+          `${file.name}: la fotografía está repetida.`
+        );
+
+        return;
+      }
+
+      processedFiles.add(
+        signature
       );
 
-    if (!validation.valid) {
-      errors.push(
-        `${file.name}: ${validation.error}`
-      );
+      const validation =
+        validateMediaFile(
+          file,
+          'image'
+        );
 
-      return;
+      if (!validation.valid) {
+        errors.push(
+          `${file.name}: ${validation.error}`
+        );
+
+        return;
+      }
+
+      const mediaItem =
+        createMediaItem(
+          file
+        );
+
+      if (mediaItem) {
+        items.push(
+          mediaItem
+        );
+      }
     }
-
-    const mediaItem =
-      createMediaItem(file);
-
-    if (mediaItem) {
-      items.push(mediaItem);
-    }
-  });
+  );
 
   if (
     selectedFiles.length >
     availableSpaces
   ) {
     errors.push(
-      `Solo se agregaron ${availableSpaces} imágenes porque el límite es ${MAX_GALLERY_IMAGES}.`
+      `Solo se agregaron hasta ${availableSpaces} imágenes porque el límite es ${MAX_GALLERY_IMAGES}.`
     );
   }
 
@@ -345,25 +757,136 @@ export function prepareGalleryFiles(
   };
 }
 
+/*
+ * =========================================================
+ * NOMBRE DE ITEM
+ * =========================================================
+ */
+
+function getMediaItemName(
+  mediaItem
+) {
+  if (!mediaItem) {
+    return '';
+  }
+
+  if (
+    typeof mediaItem ===
+    'string'
+  ) {
+    try {
+      const pathname =
+        new URL(
+          mediaItem,
+          window?.location?.origin ||
+            'http://localhost'
+        ).pathname;
+
+      return (
+        pathname
+          .split('/')
+          .filter(Boolean)
+          .pop() || ''
+      );
+    } catch {
+      return mediaItem;
+    }
+  }
+
+  if (
+    typeof mediaItem ===
+    'object'
+  ) {
+    if (
+      cleanText(
+        mediaItem.name
+      )
+    ) {
+      return cleanText(
+        mediaItem.name
+      );
+    }
+
+    const file =
+      getMediaItemFile(
+        mediaItem
+      );
+
+    if (
+      file &&
+      cleanText(file.name)
+    ) {
+      return cleanText(
+        file.name
+      );
+    }
+
+    const url =
+      getMediaItemUrl(
+        mediaItem
+      );
+
+    if (url) {
+      try {
+        return (
+          new URL(
+            url,
+            typeof window !==
+              'undefined'
+              ? window.location.origin
+              : 'http://localhost'
+          ).pathname
+            .split('/')
+            .filter(Boolean)
+            .pop() || ''
+        );
+      } catch {
+        return url;
+      }
+    }
+  }
+
+  return '';
+}
+
+/*
+ * =========================================================
+ * NOMBRES PARA EL ADMIN
+ * =========================================================
+ */
+
 export function getMediaFileNames(
   media
 ) {
+  const gallery =
+    Array.isArray(
+      media?.gallery
+    )
+      ? media.gallery
+      : [];
+
   return {
     coverImageName:
-      media?.coverImage?.name || '',
+      getMediaItemName(
+        media?.coverImage
+      ),
 
     coupleImageName:
-      media?.coupleImage?.name || '',
+      getMediaItemName(
+        media?.coupleImage
+      ),
 
     musicFileName:
-      media?.backgroundMusic?.name ||
-      '',
+      getMediaItemName(
+        media?.backgroundMusic ||
+          media?.musicUrl
+      ),
 
     galleryFileNames:
-      Array.isArray(media?.gallery)
-        ? media.gallery.map(
-            (image) => image.name
-          )
-        : []
+      gallery
+        .map(
+          getMediaItemName
+        )
+        .filter(Boolean)
   };
 }

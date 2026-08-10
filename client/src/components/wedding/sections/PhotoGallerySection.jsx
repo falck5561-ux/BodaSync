@@ -1,19 +1,4 @@
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
-
-import { createPortal } from 'react-dom';
-
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion
-} from 'framer-motion';
-
-import { getStyles } from '../config/weddingStyles';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 function cleanText(value) {
   if (typeof value !== 'string') {
@@ -25,14 +10,11 @@ function cleanText(value) {
 
 function getServerOrigin() {
   const apiUrl = cleanText(
-    import.meta.env.VITE_API_URL ||
-      'http://localhost:5000/api'
+    import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
   );
 
   try {
-    const url = new URL(apiUrl);
-
-    return url.origin;
+    return new URL(apiUrl).origin;
   } catch {
     return 'http://localhost:5000';
   }
@@ -45,10 +27,7 @@ function resolveImageUrl(value) {
     return '';
   }
 
-  if (
-    imageUrl.startsWith('data:') ||
-    imageUrl.startsWith('blob:')
-  ) {
+  if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
     return imageUrl;
   }
 
@@ -56,28 +35,17 @@ function resolveImageUrl(value) {
     return imageUrl;
   }
 
-  const serverOrigin =
-    getServerOrigin();
+  const serverOrigin = getServerOrigin();
 
-  if (
-    imageUrl.startsWith(
-      '/uploads/'
-    )
-  ) {
+  if (imageUrl.startsWith('/uploads/')) {
     return `${serverOrigin}${imageUrl}`;
   }
 
-  if (
-    imageUrl.startsWith(
-      'uploads/'
-    )
-  ) {
+  if (imageUrl.startsWith('uploads/')) {
     return `${serverOrigin}/${imageUrl}`;
   }
 
-  if (
-    imageUrl.startsWith('/')
-  ) {
+  if (imageUrl.startsWith('/')) {
     return imageUrl;
   }
 
@@ -85,18 +53,11 @@ function resolveImageUrl(value) {
 }
 
 function getImageUrl(photo) {
-  if (
-    typeof photo === 'string'
-  ) {
-    return resolveImageUrl(
-      photo
-    );
+  if (typeof photo === 'string') {
+    return resolveImageUrl(photo);
   }
 
-  if (
-    !photo ||
-    typeof photo !== 'object'
-  ) {
+  if (!photo || typeof photo !== 'object') {
     return '';
   }
 
@@ -107,45 +68,34 @@ function getImageUrl(photo) {
       photo.previewUrl ||
       photo.imageUrl ||
       photo.fileUrl ||
-      photo.path
+      photo.path ||
+      photo.src
   );
 }
 
-function normalizePhotos(
-  photos = []
-) {
+function normalizePhotos(photos = []) {
   if (!Array.isArray(photos)) {
     return [];
   }
 
   return photos
     .map((photo, index) => {
-      const url =
-        getImageUrl(photo);
+      const url = getImageUrl(photo);
 
       if (!url) {
         return null;
       }
 
-      if (
-        typeof photo === 'string'
-      ) {
+      if (typeof photo === 'string') {
         return {
-          id: `gallery-photo-${
-            index + 1
-          }`,
+          id: `gallery-photo-${index + 1}`,
           url,
           alt: ''
         };
       }
 
       return {
-        id:
-          photo.id ||
-          photo._id ||
-          `gallery-photo-${
-            index + 1
-          }`,
+        id: photo.id || photo._id || `gallery-photo-${index + 1}`,
 
         url,
 
@@ -160,360 +110,400 @@ function normalizePhotos(
     .filter(Boolean);
 }
 
-function GalleryCard({
+function MobileGalleryCard({
+  photo,
+  index,
+  isDark,
+  onOpen,
+  onImageError
+}) {
+  const alt = photo.alt || `Fotografía ${index + 1}`;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(photo)}
+      aria-label={`Ampliar ${alt}`}
+      className={`relative w-[78vw] max-w-[330px] flex-none snap-center overflow-hidden rounded-[1.7rem] border p-1.5 text-left shadow-lg outline-none ${
+        isDark
+          ? 'border-white/10 bg-[#111]'
+          : 'border-black/10 bg-white'
+      }`}
+    >
+      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[1.35rem]">
+        <img
+          src={photo.url}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          draggable="false"
+          onError={() => onImageError(photo.id)}
+          className="h-full w-full select-none object-cover"
+        />
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+
+        <span className="pointer-events-none absolute bottom-4 left-4 text-[9px] font-bold uppercase tracking-[0.2em] text-white/90">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function DesktopGalleryCard({
   photo,
   index,
   isDark,
   onOpen,
   onImageError,
-  shouldReduceMotion
+  featured = false
 }) {
-  const layoutId =
-    `gallery-card-${photo.id}`;
-
-  const imageLayoutId =
-    `gallery-image-${photo.id}`;
-
-  function handleOpen() {
-    onOpen(photo);
-  }
-
-  function handleKeyDown(
-    event
-  ) {
-    if (
-      event.key ===
-        'Enter' ||
-      event.key === ' '
-    ) {
-      event.preventDefault();
-
-      handleOpen();
-    }
-  }
+  const alt = photo.alt || `Fotografía ${index + 1}`;
 
   return (
-    <motion.article
-      layoutId={layoutId}
-      role="button"
-      tabIndex={0}
-      aria-label={
-        photo.alt
-          ? `Ampliar fotografía: ${photo.alt}`
-          : 'Ampliar fotografía'
-      }
-      onClick={handleOpen}
-      onKeyDown={
-        handleKeyDown
-      }
-      initial={
-        shouldReduceMotion
-          ? false
-          : {
-              opacity: 0,
-              scale: 0.95,
-              y: 40
-            }
-      }
-      whileInView={{
-        opacity: 1,
-        scale: 1,
-        y: 0
-      }}
-      viewport={{
-        once: true,
-        margin: '-50px'
-      }}
-      transition={{
-        duration: 0.8,
-        delay: Math.min(
-          index * 0.1,
-          0.5
-        ),
-        ease: [
-          0.16,
-          1,
-          0.3,
-          1
-        ]
-      }}
-      whileHover={
-        shouldReduceMotion
-          ? undefined
-          : {
-              y: -15,
-              scale: 1.02,
-
-              rotateZ:
-                index % 2 === 0
-                  ? 1
-                  : -1,
-
-              zIndex: 10
-            }
-      }
-      whileTap={
-        shouldReduceMotion
-          ? undefined
-          : {
-              scale: 0.98
-            }
-      }
-      className={`group relative h-[400px] min-w-[280px] cursor-pointer overflow-hidden rounded-[2rem] p-2 shadow-[0_20px_50px_rgba(0,0,0,0.4)] outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:ring-offset-4 md:h-[480px] md:min-w-[340px] ${
+    <button
+      type="button"
+      onClick={() => onOpen(photo)}
+      aria-label={`Ampliar ${alt}`}
+      className={`group relative h-full w-full overflow-hidden rounded-[2rem] border text-left outline-none transition-all duration-500 focus-visible:ring-2 focus-visible:ring-[#C5A059] ${
         isDark
-          ? 'border border-white/10 bg-[#111] focus-visible:ring-offset-[#050505]'
-          : 'border border-black/5 bg-white focus-visible:ring-offset-[#F9F7F2]'
+          ? 'border-white/10 bg-[#111] shadow-[0_20px_60px_rgba(0,0,0,0.35)]'
+          : 'border-black/[0.08] bg-white shadow-[0_18px_50px_rgba(51,42,27,0.13)]'
+      } hover:-translate-y-1 ${
+        featured ? 'min-h-[610px]' : 'min-h-[292px]'
       }`}
     >
-      <div className="relative h-full w-full overflow-hidden rounded-[1.5rem]">
-        <motion.img
-          layoutId={
-            imageLayoutId
-          }
-          src={photo.url}
-          alt={photo.alt}
-          loading="lazy"
-          draggable="false"
-          onError={() =>
-            onImageError(
-              photo.id
-            )
-          }
-          className="pointer-events-none h-full w-full object-cover transition-transform duration-[1500ms] ease-out group-hover:scale-110"
-        />
+      <img
+        src={photo.url}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+        onError={() => onImageError(photo.id)}
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.035]"
+      />
 
-        <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/80 via-black/0 to-transparent opacity-0 transition-opacity duration-700 group-hover:opacity-100 group-focus-visible:opacity-100" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-transparent opacity-80 transition-opacity duration-500 group-hover:opacity-95" />
 
-        <div className="absolute bottom-8 left-0 right-0 z-20 flex translate-y-6 justify-center opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
-          <span className="rounded-full border border-white/30 bg-black/40 px-8 py-3 text-[10px] font-bold uppercase tracking-[0.4em] text-white shadow-xl backdrop-blur-md">
-            Ampliar
-          </span>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-6">
+        <div>
+          <p className="text-[9px] font-semibold uppercase tracking-[0.32em] text-white/65">
+            Recuerdo
+          </p>
+
+          <p className="mt-1 font-serif text-xl text-white">
+            {String(index + 1).padStart(2, '0')}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 translate-y-2 items-center justify-center rounded-full border border-white/25 bg-black/25 text-white opacity-0 backdrop-blur-sm transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+          ↗
         </div>
       </div>
-    </motion.article>
+    </button>
+  );
+}
+
+function DesktopGallery({
+  photos,
+  isDark,
+  onOpen,
+  onImageError
+}) {
+  if (photos.length === 1) {
+    return (
+      <div className="mx-auto max-w-[580px] px-8">
+        <DesktopGalleryCard
+          photo={photos[0]}
+          index={0}
+          isDark={isDark}
+          onOpen={onOpen}
+          onImageError={onImageError}
+          featured
+        />
+      </div>
+    );
+  }
+
+  if (photos.length === 2) {
+    return (
+      <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-5 px-8">
+        {photos.map((photo, index) => (
+          <div
+            key={photo.id}
+            className="min-h-[560px]"
+          >
+            <DesktopGalleryCard
+              photo={photo}
+              index={index}
+              isDark={isDark}
+              onOpen={onOpen}
+              onImageError={onImageError}
+              featured
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const firstPhoto = photos[0];
+  const sidePhotos = photos.slice(1, 3);
+  const remainingPhotos = photos.slice(3);
+
+  return (
+    <div className="mx-auto max-w-[1120px] px-8">
+      <div className="grid grid-cols-[1.16fr_0.84fr] gap-5">
+        <div>
+          <DesktopGalleryCard
+            photo={firstPhoto}
+            index={0}
+            isDark={isDark}
+            onOpen={onOpen}
+            onImageError={onImageError}
+            featured
+          />
+        </div>
+
+        <div className="grid grid-rows-2 gap-5">
+          {sidePhotos.map((photo, sideIndex) => (
+            <DesktopGalleryCard
+              key={photo.id}
+              photo={photo}
+              index={sideIndex + 1}
+              isDark={isDark}
+              onOpen={onOpen}
+              onImageError={onImageError}
+            />
+          ))}
+        </div>
+      </div>
+
+      {remainingPhotos.length > 0 && (
+        <div className="mt-5 grid grid-cols-2 gap-5 lg:grid-cols-3">
+          {remainingPhotos.map((photo, index) => (
+            <div
+              key={photo.id}
+              className="min-h-[330px]"
+            >
+              <DesktopGalleryCard
+                photo={photo}
+                index={index + 3}
+                isDark={isDark}
+                onOpen={onOpen}
+                onImageError={onImageError}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 function GalleryModal({
   photo,
-  isDark,
+  photoIndex,
+  totalPhotos,
   onClose,
-  onImageError,
-  shouldReduceMotion
+  onPrevious,
+  onNext,
+  onImageError
 }) {
-  const styles =
-    getStyles(isDark);
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
 
-  const layoutId =
-    `gallery-card-${photo.id}`;
-
-  const imageLayoutId =
-    `gallery-image-${photo.id}`;
-
-  /*
-   * ESC cierra la fotografía.
-   */
   useEffect(() => {
-    function handleKeyDown(
-      event
-    ) {
-      if (
-        event.key ===
-        'Escape'
-      ) {
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
         onClose();
+      }
+
+      if (event.key === 'ArrowLeft') {
+        onPrevious();
+      }
+
+      if (event.key === 'ArrowRight') {
+        onNext();
       }
     }
 
-    document.addEventListener(
-      'keydown',
-      handleKeyDown
-    );
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.removeEventListener(
-        'keydown',
-        handleKeyDown
-      );
+      document.body.style.overflow = previousOverflow;
+
+      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, onNext, onPrevious]);
 
-  /*
-   * Evitamos que la invitación
-   * de atrás pueda desplazarse
-   * mientras la foto está abierta.
-   */
-  useEffect(() => {
-    const previousOverflow =
-      document.body.style
-        .overflow;
+  function handleTouchStart(event) {
+    const touch = event.touches?.[0];
 
-    document.body.style.overflow =
-      'hidden';
+    if (!touch) {
+      return;
+    }
 
-    return () => {
-      document.body.style.overflow =
-        previousOverflow;
-    };
-  }, []);
-
-  function handleError() {
-    onImageError(photo.id);
-    onClose();
+    touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
   }
 
-  if (
-    typeof document ===
-    'undefined'
-  ) {
-    return null;
+  function handleTouchEnd(event) {
+    const touch = event.changedTouches?.[0];
+
+    if (
+      !touch ||
+      touchStartX.current === null ||
+      touchStartY.current === null
+    ) {
+      return;
+    }
+
+    const distanceX =
+      touch.clientX - touchStartX.current;
+
+    const distanceY =
+      touch.clientY - touchStartY.current;
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    if (
+      Math.abs(distanceX) < 45 ||
+      Math.abs(distanceX) <= Math.abs(distanceY)
+    ) {
+      return;
+    }
+
+    if (distanceX > 0) {
+      onPrevious();
+      return;
+    }
+
+    onNext();
   }
 
-  /*
-   * =====================================================
-   * CORRECCIÓN IMPORTANTE
-   * =====================================================
-   *
-   * Antes este modal se renderizaba dentro de:
-   *
-   * PhotoGallerySection
-   *   ↓
-   * LandingPage
-   *   ↓
-   * motion.main
-   *
-   * y podía quedar atrapado dentro de un
-   * stacking context generado por animaciones,
-   * transforms o z-index.
-   *
-   * Ahora createPortal lo monta directamente
-   * en document.body.
-   *
-   * NO cambiamos su diseño.
-   * NO cambiamos su animación.
-   * NO cambiamos el tamaño de la imagen.
-   */
-  return createPortal(
-    <motion.div
+  function handlePhotoAreaClick(event) {
+    event.stopPropagation();
+  }
+
+  const alt =
+    photo.alt || `Fotografía ${photoIndex + 1}`;
+
+  return (
+    <div
       role="dialog"
       aria-modal="true"
-      aria-label={
-        photo.alt
-          ? `Fotografía ampliada: ${photo.alt}`
-          : 'Fotografía ampliada'
-      }
-      initial={{
-        opacity: 0
-      }}
-      animate={{
-        opacity: 1
-      }}
-      exit={{
-        opacity: 0
-      }}
-      transition={{
-        duration:
-          shouldReduceMotion
-            ? 0.2
-            : 0.5,
-
-        ease: 'easeInOut'
-      }}
+      aria-label={`Fotografía ampliada: ${alt}`}
       onClick={onClose}
-      className={`fixed inset-0 z-[999999] flex items-center justify-center p-4 md:p-12 ${styles.overlay}`}
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 p-3 backdrop-blur-sm md:p-10"
     >
       {/*
-       * CAPA DE SEGURIDAD
+       * =====================================================
+       * CONTENEDOR GENERAL
+       * =====================================================
        *
-       * Está detrás de la foto, pero delante
-       * de TODA la invitación.
+       * NO tiene stopPropagation.
        *
-       * Esto evita que:
-       *
-       * - títulos
-       * - padres
-       * - divisores
-       * - botones
-       * - controles
-       * - otras secciones
-       *
-       * aparezcan encima de la fotografía.
-       *
-       * La dejamos muy parecida al fondo
-       * que ya tenía el visor anterior.
+       * De esta forma cualquier toque/clic en el fondo
+       * negro llega hasta el overlay y ejecuta onClose().
        */}
-      <div
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 ${
-          isDark
-            ? 'bg-black/95'
-            : 'bg-[#F9F7F2]/95'
-        }`}
-      />
 
-      <motion.div
-        layoutId={layoutId}
-        transition={{
-          type: 'spring',
-          stiffness: 150,
-          damping: 25,
-          mass: 0.8
-        }}
-        onClick={(event) =>
-          event.stopPropagation()
-        }
-        className={`relative z-10 max-h-[90vh] max-w-[95vw] overflow-hidden rounded-[2rem] p-2 shadow-[0_0_100px_rgba(0,0,0,0.8)] ${
-          isDark
-            ? 'border border-white/10 bg-[#111]'
-            : 'border border-black/10 bg-white'
-        }`}
-      >
-        <motion.button
+      <div className="relative flex h-full max-h-[94vh] w-full max-w-[1250px] select-none items-center justify-center">
+        {/*
+         * =====================================================
+         * CONTROLES SOLO PARA PC
+         * =====================================================
+         */}
+
+        <button
           type="button"
-          initial={
-            shouldReduceMotion
-              ? false
-              : {
-                  opacity: 0,
-                  scale: 0
-                }
-          }
-          animate={{
-            opacity: 1,
-            scale: 1
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
           }}
-          exit={{
-            opacity: 0,
-            scale: 0
-          }}
-          transition={{
-            delay:
-              shouldReduceMotion
-                ? 0
-                : 0.25
-          }}
-          onClick={onClose}
           aria-label="Cerrar fotografía"
-          className="absolute right-6 top-6 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-xl backdrop-blur-md transition-all hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          className="absolute right-0 top-0 z-30 hidden h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/50 text-lg text-white backdrop-blur-md transition-all hover:rotate-90 hover:bg-white hover:text-black md:flex"
         >
           ✕
-        </motion.button>
+        </button>
 
-        <motion.img
-          layoutId={
-            imageLayoutId
-          }
-          src={photo.url}
-          alt={photo.alt}
-          draggable="false"
-          onError={
-            handleError
-          }
-          className="h-auto max-h-[85vh] w-auto max-w-full rounded-[1.5rem] object-contain"
-        />
-      </motion.div>
-    </motion.div>,
-    document.body
+        {totalPhotos > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPrevious();
+              }}
+              aria-label="Fotografía anterior"
+              className="absolute left-0 top-1/2 z-30 hidden h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-3xl font-light text-white backdrop-blur-md transition-all hover:scale-105 hover:bg-white hover:text-black md:flex"
+            >
+              ‹
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onNext();
+              }}
+              aria-label="Fotografía siguiente"
+              className="absolute right-0 top-1/2 z-30 hidden h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-3xl font-light text-white backdrop-blur-md transition-all hover:scale-105 hover:bg-white hover:text-black md:flex"
+            >
+              ›
+            </button>
+          </>
+        )}
+
+        {/*
+         * =====================================================
+         * ÁREA REAL DE LA FOTOGRAFÍA
+         * =====================================================
+         *
+         * SOLO esta zona detiene el clic.
+         *
+         * Tocar foto:
+         * no cierra.
+         *
+         * Deslizar foto:
+         * cambia de fotografía.
+         *
+         * Tocar cualquier fondo negro:
+         * cierra.
+         */}
+
+        <div
+          onClick={handlePhotoAreaClick}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="relative flex max-h-[92vh] max-w-full items-center justify-center md:max-w-[calc(100%-170px)]"
+        >
+          <img
+            src={photo.url}
+            alt={alt}
+            draggable="false"
+            decoding="async"
+            onError={() => {
+              onImageError(photo.id);
+              onClose();
+            }}
+            className="block max-h-[90vh] max-w-[94vw] select-none rounded-[1.2rem] object-contain shadow-[0_30px_100px_rgba(0,0,0,0.6)] md:max-w-[calc(100vw-220px)] md:rounded-[1.6rem]"
+          />
+
+          {totalPhotos > 1 && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-[9px] font-bold tracking-[0.18em] text-white/90 backdrop-blur-md">
+              {photoIndex + 1} / {totalPhotos}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -525,129 +515,119 @@ export function PhotoGallerySection({
   subtitle = 'Desliza para descubrir',
   className = ''
 }) {
-  const shouldReduceMotion =
-    useReducedMotion();
+  const [selectedPhotoId, setSelectedPhotoId] = useState(null);
 
-  const carouselRef =
-    useRef(null);
-
-  const [
-    selectedPhotoId,
-    setSelectedPhotoId
-  ] = useState(null);
-
-  const [
-    failedPhotoIds,
-    setFailedPhotoIds
-  ] = useState(
+  const [failedPhotoIds, setFailedPhotoIds] = useState(
     () => new Set()
   );
 
-  const galleryPhotos =
-    useMemo(() => {
-      const source =
-        photos ||
-        wedding.media?.gallery ||
-        wedding.gallery ||
-        wedding.photos ||
-        [];
+  const galleryPhotos = useMemo(() => {
+    const source =
+      photos ||
+      wedding.media?.gallery ||
+      wedding.gallery ||
+      wedding.photos ||
+      [];
 
-      return normalizePhotos(
-        source
-      );
-    }, [
-      photos,
-      wedding
-    ]);
+    return normalizePhotos(source);
+  }, [photos, wedding]);
 
   useEffect(() => {
-    setFailedPhotoIds(
-      new Set()
-    );
-
-    setSelectedPhotoId(
-      null
-    );
+    setFailedPhotoIds(new Set());
+    setSelectedPhotoId(null);
   }, [galleryPhotos]);
 
-  const visiblePhotos =
-    useMemo(() => {
-      return galleryPhotos.filter(
-        (photo) =>
-          !failedPhotoIds.has(
-            photo.id
-          )
-      );
-    }, [
-      failedPhotoIds,
-      galleryPhotos
-    ]);
+  const visiblePhotos = useMemo(() => {
+    return galleryPhotos.filter(
+      (photo) => !failedPhotoIds.has(photo.id)
+    );
+  }, [failedPhotoIds, galleryPhotos]);
+
+  const selectedPhotoIndex = useMemo(() => {
+    if (!selectedPhotoId) {
+      return -1;
+    }
+
+    return visiblePhotos.findIndex(
+      (photo) => photo.id === selectedPhotoId
+    );
+  }, [selectedPhotoId, visiblePhotos]);
 
   const selectedPhoto =
-    useMemo(() => {
-      return (
-        visiblePhotos.find(
-          (photo) =>
-            photo.id ===
-            selectedPhotoId
-        ) || null
-      );
-    }, [
-      selectedPhotoId,
-      visiblePhotos
-    ]);
+    selectedPhotoIndex >= 0
+      ? visiblePhotos[selectedPhotoIndex]
+      : null;
 
-  function openPhoto(
-    photo
-  ) {
-    setSelectedPhotoId(
-      photo.id
-    );
+  function openPhoto(photo) {
+    setSelectedPhotoId(photo.id);
   }
 
   function closePhoto() {
+    setSelectedPhotoId(null);
+  }
+
+  function showPreviousPhoto() {
+    if (visiblePhotos.length <= 1) {
+      return;
+    }
+
+    const currentIndex =
+      selectedPhotoIndex >= 0
+        ? selectedPhotoIndex
+        : 0;
+
+    const previousIndex =
+      currentIndex === 0
+        ? visiblePhotos.length - 1
+        : currentIndex - 1;
+
     setSelectedPhotoId(
-      null
+      visiblePhotos[previousIndex].id
     );
   }
 
-  function handleImageError(
-    photoId
-  ) {
-    setFailedPhotoIds(
-      (currentIds) => {
-        const nextIds =
-          new Set(
-            currentIds
-          );
+  function showNextPhoto() {
+    if (visiblePhotos.length <= 1) {
+      return;
+    }
 
-        nextIds.add(
-          photoId
-        );
+    const currentIndex =
+      selectedPhotoIndex >= 0
+        ? selectedPhotoIndex
+        : 0;
 
-        return nextIds;
-      }
-    );
+    const nextIndex =
+      currentIndex === visiblePhotos.length - 1
+        ? 0
+        : currentIndex + 1;
 
     setSelectedPhotoId(
-      (currentPhotoId) =>
-        currentPhotoId ===
-        photoId
-          ? null
-          : currentPhotoId
+      visiblePhotos[nextIndex].id
     );
   }
 
-  if (
-    galleryPhotos.length ===
-    0
-  ) {
+  function handleImageError(photoId) {
+    setFailedPhotoIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+
+      nextIds.add(photoId);
+
+      return nextIds;
+    });
+
+    setSelectedPhotoId((currentPhotoId) =>
+      currentPhotoId === photoId
+        ? null
+        : currentPhotoId
+    );
+  }
+
+  if (galleryPhotos.length === 0) {
     return null;
   }
 
   if (
-    visiblePhotos.length ===
-      0 &&
+    visiblePhotos.length === 0 &&
     failedPhotoIds.size > 0
   ) {
     return null;
@@ -656,171 +636,118 @@ export function PhotoGallerySection({
   return (
     <section
       aria-label="Galería de fotografías"
-      className={`relative w-full overflow-hidden py-8 ${className}`}
+      className={`relative w-full py-10 md:py-16 ${className}`}
     >
-      {/*
-       * ==========================================
-       * ENCABEZADO ORIGINAL
-       * ==========================================
-       */}
-      <motion.header
-        initial={
-          shouldReduceMotion
-            ? false
-            : {
-                opacity: 0,
-                y: 20
-              }
-        }
-        whileInView={{
-          opacity: 1,
-          y: 0
-        }}
-        viewport={{
-          once: true
-        }}
-        transition={{
-          duration: 1
-        }}
-        className="mb-10 flex flex-col items-center justify-center px-6 text-center"
-      >
+      <header className="mb-8 flex flex-col items-center justify-center px-5 text-center md:mb-12">
         {title && (
           <h3
-            className={`font-serif text-3xl font-light md:text-4xl ${
+            className={`font-serif text-3xl font-light sm:text-4xl md:text-5xl ${
               isDark
                 ? 'text-[#FDFBF7]'
-                : 'text-[#111111]'
+                : 'text-[#17130d]'
             }`}
           >
             {title}
           </h3>
         )}
 
-        {subtitle && (
-          <div className="mt-5 flex items-center justify-center gap-4 opacity-60">
-            <div
-              className={`h-px w-8 ${
-                isDark
-                  ? 'bg-[#C5A059]'
-                  : 'bg-[#9E7A32]'
-              }`}
-            />
-
-            <p
-              className={`text-[9px] font-bold uppercase tracking-[0.4em] ${
-                isDark
-                  ? 'text-[#C5A059]'
-                  : 'text-[#9E7A32]'
-              }`}
-            >
-              {subtitle}
-            </p>
-
-            <div
-              className={`h-px w-8 ${
-                isDark
-                  ? 'bg-[#C5A059]'
-                  : 'bg-[#9E7A32]'
-              }`}
-            />
-          </div>
-        )}
-      </motion.header>
-
-      {/*
-       * ==========================================
-       * CARRUSEL ORIGINAL
-       * ==========================================
-       *
-       * Lo dejamos tal como estaba:
-       *
-       * - horizontal
-       * - drag
-       * - tarjetas grandes
-       * - animación hover
-       * - "Ampliar"
-       */}
-      <motion.div
-        ref={carouselRef}
-        className="-my-12 flex cursor-grab overflow-hidden px-6 py-12 active:cursor-grabbing md:px-12"
-      >
-        <motion.div
-          drag={
-            shouldReduceMotion
-              ? false
-              : 'x'
-          }
-          dragConstraints={
-            carouselRef
-          }
-          dragElastic={0.08}
-          className="flex gap-8 md:gap-14"
-        >
-          {visiblePhotos.map(
-            (
-              photo,
-              index
-            ) => (
-              <GalleryCard
-                key={
-                  photo.id
-                }
-                photo={
-                  photo
-                }
-                index={
-                  index
-                }
-                isDark={
-                  isDark
-                }
-                onOpen={
-                  openPhoto
-                }
-                onImageError={
-                  handleImageError
-                }
-                shouldReduceMotion={
-                  shouldReduceMotion
-                }
-              />
-            )
-          )}
-        </motion.div>
-      </motion.div>
-
-      {/*
-       * ==========================================
-       * VISOR
-       * ==========================================
-       *
-       * Se conserva la misma animación.
-       *
-       * GalleryModal ahora usa createPortal,
-       * así que aunque este JSX esté aquí,
-       * visualmente se monta en <body>.
-       */}
-      <AnimatePresence>
-        {selectedPhoto && (
-          <GalleryModal
-            photo={
-              selectedPhoto
-            }
-            isDark={
+        <div className="mt-5 flex items-center justify-center gap-4 opacity-70">
+          <div
+            className={`h-px w-8 md:w-12 ${
               isDark
-            }
-            onClose={
-              closePhoto
-            }
-            onImageError={
-              handleImageError
-            }
-            shouldReduceMotion={
-              shouldReduceMotion
-            }
+                ? 'bg-[#C5A059]'
+                : 'bg-[#9E7A32]'
+            }`}
           />
-        )}
-      </AnimatePresence>
+
+          <p
+            className={`text-[8px] font-bold uppercase tracking-[0.3em] sm:text-[9px] ${
+              isDark
+                ? 'text-[#C5A059]'
+                : 'text-[#9E7A32]'
+            }`}
+          >
+            <span className="md:hidden">
+              {subtitle}
+            </span>
+
+            <span className="hidden md:inline">
+              Una historia en imágenes
+            </span>
+          </p>
+
+          <div
+            className={`h-px w-8 md:w-12 ${
+              isDark
+                ? 'bg-[#C5A059]'
+                : 'bg-[#9E7A32]'
+            }`}
+          />
+        </div>
+      </header>
+
+      {/*
+       * =====================================================
+       * CELULAR
+       * =====================================================
+       *
+       * Scroll horizontal nativo.
+       * Sin flechas.
+       * Sin X.
+       * Sin Framer Motion.
+       */}
+
+      <div
+        className="flex w-full snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 md:hidden"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          overscrollBehaviorX: 'contain'
+        }}
+      >
+        {visiblePhotos.map((photo, index) => (
+          <MobileGalleryCard
+            key={photo.id}
+            photo={photo}
+            index={index}
+            isDark={isDark}
+            onOpen={openPhoto}
+            onImageError={handleImageError}
+          />
+        ))}
+
+        <div className="w-1 flex-none" />
+      </div>
+
+      {/*
+       * =====================================================
+       * PC
+       * =====================================================
+       *
+       * Composición editorial.
+       */}
+
+      <div className="hidden md:block">
+        <DesktopGallery
+          photos={visiblePhotos}
+          isDark={isDark}
+          onOpen={openPhoto}
+          onImageError={handleImageError}
+        />
+      </div>
+
+      {selectedPhoto && (
+        <GalleryModal
+          photo={selectedPhoto}
+          photoIndex={selectedPhotoIndex}
+          totalPhotos={visiblePhotos.length}
+          onClose={closePhoto}
+          onPrevious={showPreviousPhoto}
+          onNext={showNextPhoto}
+          onImageError={handleImageError}
+        />
+      )}
     </section>
   );
 }

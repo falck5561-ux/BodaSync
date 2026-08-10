@@ -24,18 +24,26 @@ const allowedOrigins = [
   CLIENT_URL
 ].filter(Boolean);
 
+/*
+ * =========================================================
+ * CORS
+ * =========================================================
+ */
+
 app.use(
   cors({
     origin(origin, callback) {
       /*
-       * Permitir también herramientas como
-       * Postman o peticiones sin Origin.
+       * Permitimos peticiones sin Origin,
+       * por ejemplo Postman o herramientas internas.
        */
       if (!origin) {
         return callback(null, true);
       }
 
-      if (allowedOrigins.includes(origin)) {
+      if (
+        allowedOrigins.includes(origin)
+      ) {
         return callback(null, true);
       }
 
@@ -49,6 +57,12 @@ app.use(
     credentials: true
   })
 );
+
+/*
+ * =========================================================
+ * BODY PARSERS
+ * =========================================================
+ */
 
 app.use(
   express.json({
@@ -64,10 +78,16 @@ app.use(
 );
 
 /*
- * =====================================================
+ * =========================================================
  * ARCHIVOS SUBIDOS
- * =====================================================
+ * =========================================================
+ *
+ * Permite acceder públicamente a:
+ *
+ * /uploads/images/archivo.jpg
+ * /uploads/audio/archivo.mp3
  */
+
 app.use(
   '/uploads',
   express.static(
@@ -79,80 +99,82 @@ app.use(
 );
 
 /*
- * =====================================================
+ * =========================================================
  * HEALTH CHECK
- * =====================================================
+ * =========================================================
  */
+
 app.get(
   '/api/health',
   (req, res) => {
     return res.status(200).json({
       ok: true,
-      message: 'BodaSync API funcionando.'
+      message:
+        'BodaSync API funcionando.'
     });
   }
 );
 
 /*
- * =====================================================
+ * =========================================================
  * UPLOADS
- * =====================================================
+ * =========================================================
  */
+
 app.use(
   '/api/uploads',
   uploadRoutes
 );
 
 /*
- * =====================================================
+ * =========================================================
  * LIBRO DE FIRMAS
- * =====================================================
+ * =========================================================
  *
- * Esto produce exactamente:
- *
- * GET
+ * GET:
  * /api/weddings/:slug/messages
  *
- * POST
+ * POST:
  * /api/weddings/:slug/messages
  */
+
 app.use(
   '/api/weddings',
   guestMessageRoutes
 );
 
 /*
- * =====================================================
+ * =========================================================
  * BODAS
- * =====================================================
+ * =========================================================
  */
+
 app.use(
   '/api/weddings',
   weddingRoutes
 );
 
 /*
- * =====================================================
+ * =========================================================
  * 404
- * =====================================================
- *
- * IMPORTANTE:
- * esto siempre debe estar DESPUÉS
- * de todas las rutas anteriores.
+ * =========================================================
  */
+
 app.use(
   (req, res) => {
     return res.status(404).json({
-      message: 'Ruta no encontrada.'
+      message:
+        'Ruta no encontrada.'
     });
   }
 );
 
 /*
- * =====================================================
+ * =========================================================
  * MANEJADOR DE ERRORES
- * =====================================================
+ * =========================================================
  */
+
 app.use(
   (error, req, res, next) => {
     console.error(
@@ -164,21 +186,24 @@ app.use(
       return next(error);
     }
 
-    return res.status(
-      error.status || 500
-    ).json({
-      message:
-        error.message ||
-        'Error interno del servidor.'
-    });
+    return res
+      .status(
+        error.status || 500
+      )
+      .json({
+        message:
+          error.message ||
+          'Error interno del servidor.'
+      });
   }
 );
 
 /*
- * =====================================================
+ * =========================================================
  * INICIAR SERVIDOR
- * =====================================================
+ * =========================================================
  */
+
 async function startServer() {
   const mongoUri =
     process.env.MONGO_URI;
@@ -205,6 +230,14 @@ async function startServer() {
       () => {
         console.log(
           `Servidor funcionando en http://localhost:${PORT}`
+        );
+
+        console.log(
+          `Uploads: http://localhost:${PORT}/uploads`
+        );
+
+        console.log(
+          `API de bodas: http://localhost:${PORT}/api/weddings`
         );
 
         console.log(
