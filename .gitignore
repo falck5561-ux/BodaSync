@@ -1,1 +1,47 @@
+# Dependencias
 node_modules/
+client/node_modules/
+server/node_modules/
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+client/.env
+client/.env.*
+server/.env
+server/.env.*
+
+# Archivos subidos por usuarios
+server/uploads/*
+!server/uploads/.gitkeep
+!server/uploads/images/
+!server/uploads/audio/
+!server/uploads/images/.gitkeep
+!server/uploads/audio/.gitkeep
+
+# Builds
+dist/
+build/
+client/dist/
+server/dist/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Archivos temporales
+*.tmp
+*.temp
+.cache/
