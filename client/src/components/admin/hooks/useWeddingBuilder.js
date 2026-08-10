@@ -12,6 +12,7 @@ import {
 import useAdminSettings, {
   getInitialAdminSettings
 } from './useAdminSettings';
+
 import useItinerary from './useItinerary';
 import useWeddingEvents from './useWeddingEvents';
 import useWeddingForm from './useWeddingForm';
@@ -30,12 +31,31 @@ import {
   validateWeddingForm
 } from '../utils/weddingValidation';
 
+function canUseWindow() {
+  return typeof window !== 'undefined';
+}
+
+function buildPublicWeddingUrl(wedding) {
+  if (
+    !canUseWindow() ||
+    !wedding?.slug
+  ) {
+    return '';
+  }
+
+  return `${window.location.origin}/boda/${encodeURIComponent(
+    wedding.slug
+  )}`;
+}
+
 export default function useWeddingBuilder() {
+  /*
+   * Tomamos los ajustes guardados antes de
+   * crear el formulario inicial.
+   */
   const initialSettingsRef = useRef(
     getInitialAdminSettings()
   );
-
-  const submittingRef = useRef(false);
 
   const [
     activeSection,
@@ -62,10 +82,28 @@ export default function useWeddingBuilder() {
     setSubmitting
   ] = useState(false);
 
-  const weddingForm = useWeddingForm(
-    initialSettingsRef.current.defaultMessage
-  );
+  /*
+   * Evita envíos dobles incluso si React todavía
+   * no ha actualizado submitting.
+   */
+  const submittingRef =
+    useRef(false);
 
+  /*
+   * =====================================================
+   * FORMULARIO
+   * =====================================================
+   */
+  const weddingForm =
+    useWeddingForm(
+      initialSettingsRef.current.defaultMessage
+    );
+
+  /*
+   * Cuando se guarda un nuevo mensaje predeterminado,
+   * solo lo aplicamos al formulario actual si todavía
+   * no existe un mensaje.
+   */
   const handleDefaultMessageSaved =
     useCallback(
       (defaultMessage) => {
@@ -79,9 +117,16 @@ export default function useWeddingBuilder() {
           })
         );
       },
-      [weddingForm.setFormData]
+      [
+        weddingForm.setFormData
+      ]
     );
 
+  /*
+   * =====================================================
+   * AJUSTES
+   * =====================================================
+   */
   const adminSettings =
     useAdminSettings({
       setError,
@@ -90,6 +135,11 @@ export default function useWeddingBuilder() {
         handleDefaultMessageSaved
     });
 
+  /*
+   * =====================================================
+   * ITINERARIO
+   * =====================================================
+   */
   const itinerary =
     useItinerary({
       formData:
@@ -99,12 +149,22 @@ export default function useWeddingBuilder() {
         weddingForm.setFormData
     });
 
+  /*
+   * =====================================================
+   * MULTIMEDIA
+   * =====================================================
+   */
   const weddingMedia =
     useWeddingMedia({
       setError,
       setSuccessMessage
     });
 
+  /*
+   * =====================================================
+   * EVENTOS
+   * =====================================================
+   */
   const weddingEvents =
     useWeddingEvents({
       setError,
@@ -112,42 +172,71 @@ export default function useWeddingBuilder() {
       autoLoad: true
     });
 
+  /*
+   * =====================================================
+   * DATOS CALCULADOS
+   * =====================================================
+   */
   const previewDate =
-    useMemo(() => {
-      return formatPreviewDate(
-        weddingForm.formData.eventDate
-      );
-    }, [
-      weddingForm.formData.eventDate
-    ]);
+    useMemo(
+      () =>
+        formatPreviewDate(
+          weddingForm.formData
+            .eventDate
+        ),
+      [
+        weddingForm.formData
+          .eventDate
+      ]
+    );
 
   const builderSummary =
-    useMemo(() => {
-      return {
+    useMemo(
+      () => ({
         activeSections:
-          weddingForm.activeSectionsCount,
+          weddingForm
+            .activeSectionsCount,
 
         itineraryActivities:
-          itinerary.completedActivitiesCount,
+          itinerary
+            .completedActivitiesCount,
 
         selectedMedia:
-          weddingMedia.selectedMediaCount,
+          weddingMedia
+            .selectedMediaCount,
 
         galleryImages:
           weddingMedia.galleryCount
-      };
-    }, [
-      weddingForm.activeSectionsCount,
-      itinerary.completedActivitiesCount,
-      weddingMedia.selectedMediaCount,
-      weddingMedia.galleryCount
-    ]);
+      }),
+      [
+        weddingForm
+          .activeSectionsCount,
 
+        itinerary
+          .completedActivitiesCount,
+
+        weddingMedia
+          .selectedMediaCount,
+
+        weddingMedia.galleryCount
+      ]
+    );
+
+  /*
+   * =====================================================
+   * MENSAJES
+   * =====================================================
+   */
   function clearMessages() {
     setError('');
     setSuccessMessage('');
   }
 
+  /*
+   * =====================================================
+   * NAVEGACIÓN PRINCIPAL
+   * =====================================================
+   */
   function changeSection(section) {
     const allowedSections = [
       'create',
@@ -156,19 +245,27 @@ export default function useWeddingBuilder() {
     ];
 
     if (
-      !allowedSections.includes(section)
+      !allowedSections.includes(
+        section
+      )
     ) {
       return;
     }
 
     setActiveSection(section);
+
     clearMessages();
 
     if (section === 'events') {
-      void weddingEvents.loadEvents();
+      weddingEvents.loadEvents();
     }
   }
 
+  /*
+   * =====================================================
+   * PESTAÑAS DEL CONSTRUCTOR
+   * =====================================================
+   */
   function changeFormTab(tabName) {
     const allowedTabs = [
       'general',
@@ -181,18 +278,46 @@ export default function useWeddingBuilder() {
     ];
 
     if (
-      !allowedTabs.includes(tabName)
+      !allowedTabs.includes(
+        tabName
+      )
     ) {
       return;
     }
 
     setFormTab(tabName);
+
     setError('');
   }
 
-  function resetBuilder() {
-    if (submittingRef.current) {
-      return;
+  /*
+   * =====================================================
+   * LIMPIAR CONSTRUCTOR
+   * =====================================================
+   *
+   * Ahora respeta:
+   *
+   * settings.confirmBeforeReset
+   */
+  function resetBuilder(options = {}) {
+    const {
+      force = false
+    } = options;
+
+    if (
+      !force &&
+      adminSettings
+        .confirmBeforeReset &&
+      canUseWindow()
+    ) {
+      const shouldReset =
+        window.confirm(
+          '¿Deseas limpiar la invitación actual? Los datos que no hayas guardado se perderán.'
+        );
+
+      if (!shouldReset) {
+        return false;
+      }
     }
 
     weddingForm.resetForm(
@@ -201,13 +326,36 @@ export default function useWeddingBuilder() {
 
     weddingMedia.clearMedia();
 
-    weddingEvents.clearGeneratedWedding();
+    weddingEvents
+      .clearGeneratedWedding?.();
 
     setFormTab('general');
+
     setError('');
-    setSuccessMessage('');
+
+    setSuccessMessage(
+      'El constructor fue limpiado.'
+    );
+
+    if (canUseWindow()) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+
+    return true;
   }
 
+  /*
+   * =====================================================
+   * LIMPIAR DESPUÉS DE CREAR
+   * =====================================================
+   *
+   * Aquí NO pedimos confirmación.
+   *
+   * La boda ya fue guardada correctamente.
+   */
   function clearBuilderAfterCreation() {
     weddingForm.resetForm(
       adminSettings.defaultMessage
@@ -215,30 +363,20 @@ export default function useWeddingBuilder() {
 
     weddingMedia.clearMedia();
 
-    /*
-     * IMPORTANTE:
-     *
-     * NO limpiamos generatedWedding aquí.
-     * Necesitamos conservarlo para mostrar
-     * CreatedWeddingCard con el enlace recién
-     * generado.
-     */
-
     setFormTab('general');
   }
 
+  /*
+   * =====================================================
+   * CREAR INVITACIÓN
+   * =====================================================
+   */
   async function handleSubmit(event) {
     event?.preventDefault();
 
-    /*
-     * Evita doble envío.
-     *
-     * El ref cambia inmediatamente, mientras
-     * que el estado de React puede tardar un
-     * render en actualizarse.
-     */
     if (
       submittingRef.current ||
+      submitting ||
       weddingEvents.loading
     ) {
       return null;
@@ -246,6 +384,12 @@ export default function useWeddingBuilder() {
 
     clearMessages();
 
+    /*
+     * Validamos primero.
+     *
+     * No abrimos pestañas ni subimos archivos
+     * si el formulario todavía contiene errores.
+     */
     const validation =
       validateWeddingForm({
         formData:
@@ -257,8 +401,7 @@ export default function useWeddingBuilder() {
 
     if (!validation.valid) {
       setError(
-        validation.message ||
-          'Revisa los campos del formulario.'
+        validation.message
       );
 
       if (validation.tab) {
@@ -268,153 +411,140 @@ export default function useWeddingBuilder() {
       }
 
       /*
-       * Esperamos un momento cuando se cambia
-       * de pestaña para que React alcance a
-       * renderizar el campo inválido.
+       * Esperamos a que React muestre
+       * la pestaña correcta.
        */
-      if (validation.field) {
-        window.setTimeout(() => {
+      window.setTimeout(
+        () => {
           focusInvalidField(
             validation.field
           );
-        }, 100);
-      }
+        },
+        80
+      );
 
       return null;
     }
 
-    submittingRef.current = true;
-    setSubmitting(true);
+    /*
+     * Si el administrador eligió:
+     *
+     * "Abrir automáticamente después de crear"
+     *
+     * abrimos la pestaña AHORA, antes del await.
+     *
+     * Esto reduce el riesgo de que el navegador
+     * bloquee la pestaña como popup.
+     */
+    let invitationWindow =
+      null;
 
-    try {
-      /*
-       * PASO 1
-       * SUBIR ARCHIVOS REALES
-       *
-       * Solo hacemos POST /api/uploads si
-       * realmente existe al menos un archivo
-       * seleccionado.
-       */
-      let uploadedMedia = {};
-
-      if (
-        weddingMedia.selectedMediaCount >
-        0
-      ) {
-        setSuccessMessage(
-          'Subiendo fotografías y música...'
+    if (
+      adminSettings
+        .openCreatedInvitation &&
+      canUseWindow()
+    ) {
+      invitationWindow =
+        window.open(
+          '',
+          '_blank'
         );
 
-        uploadedMedia =
-          await uploadWeddingMedia(
-            weddingMedia.media
-          );
-
-        /*
-         * uploadWeddingMedia() ya devuelve:
-         *
-         * {
-         *   coverImage,
-         *   coupleImage,
-         *   backgroundMusic,
-         *   gallery
-         * }
-         *
-         * NO usamos:
-         *
-         * uploadResponse.media
-         */
-        if (
-          !uploadedMedia ||
-          typeof uploadedMedia !==
-            'object'
-        ) {
-          throw new Error(
-            'El servidor no devolvió correctamente los archivos subidos.'
-          );
-        }
+      if (invitationWindow) {
+        invitationWindow.opener =
+          null;
       }
+    }
+
+    try {
+      submittingRef.current =
+        true;
+
+      setSubmitting(true);
 
       /*
-       * PASO 2
-       * CREAR PAYLOAD
-       *
-       * Aquí las imágenes y música ya son URLs
-       * del servidor y no File, blob: ni
-       * C:\\fakepath.
+       * ==============================================
+       * 1. SUBIR ARCHIVOS REALES
+       * ==============================================
+       */
+      const uploadResponse =
+        await uploadWeddingMedia(
+          weddingMedia.media
+        );
+
+      /*
+       * ==============================================
+       * 2. CREAR PAYLOAD
+       * ==============================================
        */
       const payload =
         createWeddingPayload({
           formData:
             weddingForm.formData,
 
-          uploadedMedia
+          uploadedMedia:
+            uploadResponse?.media ||
+            {}
         });
 
-      if (
-        !payload ||
-        typeof payload !== 'object'
-      ) {
-        throw new Error(
-          'No fue posible preparar la información de la invitación.'
-        );
-      }
-
       /*
-       * PASO 3
-       * GUARDAR BODA EN MONGODB
+       * ==============================================
+       * 3. GUARDAR EN MONGODB
+       * ==============================================
        */
-      setSuccessMessage(
-        'Guardando invitación...'
-      );
-
       const createdWedding =
-        await weddingEvents.createEvent(
-          payload
-        );
+        await weddingEvents
+          .createEvent(
+            payload
+          );
 
       if (!createdWedding) {
-        /*
-         * createEvent ya coloca el error
-         * correspondiente cuando falla.
-         */
+        invitationWindow?.close();
+
         return null;
       }
 
-      /*
-       * PASO 4
-       * VALIDAR QUE EL BACKEND HAYA DEVUELTO
-       * EL SLUG PÚBLICO.
-       */
       if (!createdWedding.slug) {
+        invitationWindow?.close();
+
         throw new Error(
-          'La invitación fue creada, pero el servidor no devolvió el enlace público.'
+          'La invitación fue creada, pero el servidor no devolvió su enlace.'
         );
       }
 
       /*
-       * PASO 5
-       * LIMPIAR EL FORMULARIO.
-       *
-       * generatedWedding se conserva para que
-       * CreatedWeddingCard pueda mostrar:
-       *
-       * /boda/:slug
+       * ==============================================
+       * 4. ABRIR INVITACIÓN SI ESTÁ CONFIGURADO
+       * ==============================================
+       */
+      const createdUrl =
+        buildPublicWeddingUrl(
+          createdWedding
+        );
+
+      if (
+        invitationWindow &&
+        createdUrl
+      ) {
+        invitationWindow.location.href =
+          createdUrl;
+      }
+
+      /*
+       * ==============================================
+       * 5. LIMPIAR CONSTRUCTOR
+       * ==============================================
        */
       clearBuilderAfterCreation();
 
       setSuccessMessage(
-        'La invitación fue creada correctamente.'
+        adminSettings
+          .openCreatedInvitation
+          ? 'La invitación fue creada correctamente y se abrió en una nueva pestaña.'
+          : 'La invitación fue creada correctamente.'
       );
 
-      /*
-       * Subimos al inicio de la página para que
-       * se vea inmediatamente la tarjeta con el
-       * enlace generado.
-       */
-      if (
-        typeof window !== 'undefined'
-      ) {
+      if (canUseWindow()) {
         window.scrollTo({
           top: 0,
           behavior: 'smooth'
@@ -423,12 +553,7 @@ export default function useWeddingBuilder() {
 
       return createdWedding;
     } catch (submitError) {
-      console.error(
-        'Error creando invitación:',
-        submitError
-      );
-
-      setSuccessMessage('');
+      invitationWindow?.close();
 
       setError(
         submitError?.message ||
@@ -437,28 +562,92 @@ export default function useWeddingBuilder() {
 
       return null;
     } finally {
-      submittingRef.current = false;
+      submittingRef.current =
+        false;
+
       setSubmitting(false);
     }
   }
 
-  async function handleDelete(eventId) {
-    return weddingEvents.removeEvent(
-      eventId
-    );
+  /*
+   * =====================================================
+   * ELIMINAR EVENTO
+   * =====================================================
+   *
+   * Ahora respeta:
+   *
+   * settings.confirmBeforeDelete
+   */
+  async function handleDelete(
+    eventId
+  ) {
+    if (!eventId) {
+      return false;
+    }
+
+    if (
+      adminSettings
+        .confirmBeforeDelete &&
+      canUseWindow()
+    ) {
+      const shouldDelete =
+        window.confirm(
+          '¿Estás seguro de que deseas eliminar esta invitación? Esta acción no se puede deshacer.'
+        );
+
+      if (!shouldDelete) {
+        return false;
+      }
+    }
+
+    try {
+      clearMessages();
+
+      await weddingEvents
+        .removeEvent(
+          eventId
+        );
+
+      setSuccessMessage(
+        'La invitación fue eliminada correctamente.'
+      );
+
+      return true;
+    } catch (deleteError) {
+      setError(
+        deleteError?.message ||
+          'No fue posible eliminar la invitación.'
+      );
+
+      return false;
+    }
   }
 
-  function handleSaveSettings(event) {
-    return adminSettings.saveSettings(
-      event
-    );
+  /*
+   * =====================================================
+   * GUARDAR AJUSTES
+   * =====================================================
+   */
+  function handleSaveSettings(
+    event
+  ) {
+    return adminSettings
+      .saveSettings(
+        event
+      );
   }
 
+  /*
+   * =====================================================
+   * APLICAR MENSAJE PREDETERMINADO
+   * =====================================================
+   */
   function applyDefaultMessage() {
-    weddingForm.updateFormField(
-      'welcomeMessage',
-      adminSettings.defaultMessage
-    );
+    weddingForm
+      .updateFormField(
+        'welcomeMessage',
+        adminSettings.defaultMessage
+      );
 
     setError('');
 
@@ -467,13 +656,17 @@ export default function useWeddingBuilder() {
     );
   }
 
+  /*
+   * =====================================================
+   * VISTA PREVIA
+   * =====================================================
+   */
   function openPreview() {
     setFormTab('preview');
+
     setError('');
 
-    if (
-      typeof window !== 'undefined'
-    ) {
+    if (canUseWindow()) {
       window.scrollTo({
         top: 0,
         behavior: 'smooth'
@@ -483,10 +676,14 @@ export default function useWeddingBuilder() {
 
   function goToGeneralInformation() {
     setFormTab('general');
+
     setError('');
   }
 
   return {
+    /*
+     * Navegación
+     */
     activeSection,
     setActiveSection,
     changeSection,
@@ -497,6 +694,9 @@ export default function useWeddingBuilder() {
     openPreview,
     goToGeneralInformation,
 
+    /*
+     * Alertas
+     */
     error,
     setError,
 
@@ -505,6 +705,9 @@ export default function useWeddingBuilder() {
 
     clearMessages,
 
+    /*
+     * Formulario
+     */
     formData:
       weddingForm.formData,
 
@@ -512,7 +715,8 @@ export default function useWeddingBuilder() {
       weddingForm.setFormData,
 
     activeSectionsCount:
-      weddingForm.activeSectionsCount,
+      weddingForm
+        .activeSectionsCount,
 
     coupleNames:
       weddingForm.coupleNames,
@@ -521,74 +725,101 @@ export default function useWeddingBuilder() {
       weddingForm.handleChange,
 
     handleNumberChange:
-      weddingForm.handleNumberChange,
+      weddingForm
+        .handleNumberChange,
 
     handleThemeChange:
-      weddingForm.handleThemeChange,
+      weddingForm
+        .handleThemeChange,
 
     handleSectionToggle:
-      weddingForm.handleSectionToggle,
+      weddingForm
+        .handleSectionToggle,
 
     setSectionEnabled:
-      weddingForm.setSectionEnabled,
+      weddingForm
+        .setSectionEnabled,
 
     activateAllSections:
-      weddingForm.activateAllSections,
+      weddingForm
+        .activateAllSections,
 
     deactivateAllSections:
-      weddingForm.deactivateAllSections,
+      weddingForm
+        .deactivateAllSections,
 
     updateFormField:
-      weddingForm.updateFormField,
+      weddingForm
+        .updateFormField,
 
     updateNestedField:
-      weddingForm.updateNestedField,
+      weddingForm
+        .updateNestedField,
 
     loadFormData:
       weddingForm.loadFormData,
 
+    /*
+     * Itinerario
+     */
     itinerary:
       itinerary.itinerary,
 
     completedActivitiesCount:
-      itinerary.completedActivitiesCount,
+      itinerary
+        .completedActivitiesCount,
 
     hasValidActivity:
-      itinerary.hasValidActivity,
+      itinerary
+        .hasValidActivity,
 
     handleItineraryChange:
-      itinerary.handleItineraryChange,
+      itinerary
+        .handleItineraryChange,
 
     addItineraryItem:
-      itinerary.addItineraryItem,
+      itinerary
+        .addItineraryItem,
 
     removeItineraryItem:
-      itinerary.removeItineraryItem,
+      itinerary
+        .removeItineraryItem,
 
     duplicateItineraryItem:
-      itinerary.duplicateItineraryItem,
+      itinerary
+        .duplicateItineraryItem,
 
     moveItineraryItem:
-      itinerary.moveItineraryItem,
+      itinerary
+        .moveItineraryItem,
 
     moveItineraryItemUp:
-      itinerary.moveItineraryItemUp,
+      itinerary
+        .moveItineraryItemUp,
 
     moveItineraryItemDown:
-      itinerary.moveItineraryItemDown,
+      itinerary
+        .moveItineraryItemDown,
 
     sortItineraryByTime:
-      itinerary.sortItineraryByTime,
+      itinerary
+        .sortItineraryByTime,
 
     clearItinerary:
-      itinerary.clearItinerary,
+      itinerary
+        .clearItinerary,
 
     replaceItinerary:
-      itinerary.replaceItinerary,
+      itinerary
+        .replaceItinerary,
 
     getCleanItinerary:
-      itinerary.getCleanItinerary,
+      itinerary
+        .getCleanItinerary,
 
+    /*
+     * Multimedia
+     */
     media:
       weddingMedia.media,
 
@@ -599,61 +830,80 @@ export default function useWeddingBuilder() {
       weddingMedia.galleryCount,
 
     selectedMediaCount:
-      weddingMedia.selectedMediaCount,
+      weddingMedia
+        .selectedMediaCount,
 
     hasCoverImage:
-      weddingMedia.hasCoverImage,
+      weddingMedia
+        .hasCoverImage,
 
     hasCoupleImage:
-      weddingMedia.hasCoupleImage,
+      weddingMedia
+        .hasCoupleImage,
 
     hasBackgroundMusic:
-      weddingMedia.hasBackgroundMusic,
+      weddingMedia
+        .hasBackgroundMusic,
 
     hasGalleryImages:
-      weddingMedia.hasGalleryImages,
+      weddingMedia
+        .hasGalleryImages,
 
     mediaFileNames:
-      weddingMedia.mediaFileNames,
+      weddingMedia
+        .mediaFileNames,
 
     handleSingleMediaChange:
-      weddingMedia.handleSingleMediaChange,
+      weddingMedia
+        .handleSingleMediaChange,
 
     handleCoverImageChange:
-      weddingMedia.handleCoverImageChange,
+      weddingMedia
+        .handleCoverImageChange,
 
     handleCoupleImageChange:
-      weddingMedia.handleCoupleImageChange,
+      weddingMedia
+        .handleCoupleImageChange,
 
     handleBackgroundMusicChange:
-      weddingMedia.handleBackgroundMusicChange,
+      weddingMedia
+        .handleBackgroundMusicChange,
 
     removeSingleMedia:
-      weddingMedia.removeSingleMedia,
+      weddingMedia
+        .removeSingleMedia,
 
     removeCoverImage:
-      weddingMedia.removeCoverImage,
+      weddingMedia
+        .removeCoverImage,
 
     removeCoupleImage:
-      weddingMedia.removeCoupleImage,
+      weddingMedia
+        .removeCoupleImage,
 
     removeBackgroundMusic:
-      weddingMedia.removeBackgroundMusic,
+      weddingMedia
+        .removeBackgroundMusic,
 
     handleGalleryChange:
-      weddingMedia.handleGalleryChange,
+      weddingMedia
+        .handleGalleryChange,
 
     removeGalleryImage:
-      weddingMedia.removeGalleryImage,
+      weddingMedia
+        .removeGalleryImage,
 
     moveGalleryImage:
-      weddingMedia.moveGalleryImage,
+      weddingMedia
+        .moveGalleryImage,
 
     moveGalleryImageUp:
-      weddingMedia.moveGalleryImageUp,
+      weddingMedia
+        .moveGalleryImageUp,
 
     moveGalleryImageDown:
-      weddingMedia.moveGalleryImageDown,
+      weddingMedia
+        .moveGalleryImageDown,
 
     clearGallery:
       weddingMedia.clearGallery,
@@ -661,6 +911,9 @@ export default function useWeddingBuilder() {
     clearMedia:
       weddingMedia.clearMedia,
 
+    /*
+     * Eventos
+     */
     events:
       weddingEvents.events,
 
@@ -668,22 +921,16 @@ export default function useWeddingBuilder() {
       weddingEvents.setEvents,
 
     generatedWedding:
-      weddingEvents.generatedWedding,
+      weddingEvents
+        .generatedWedding,
 
     setGeneratedWedding:
-      weddingEvents.setGeneratedWedding,
+      weddingEvents
+        .setGeneratedWedding,
 
     generatedUrl:
       weddingEvents.generatedUrl,
 
-    /*
-     * El administrador se considera cargando
-     * durante TODO el proceso:
-     *
-     * subida de archivos
-     * +
-     * creación de boda.
-     */
     loading:
       submitting ||
       weddingEvents.loading,
@@ -691,10 +938,12 @@ export default function useWeddingBuilder() {
     submitting,
 
     loadingEvents:
-      weddingEvents.loadingEvents,
+      weddingEvents
+        .loadingEvents,
 
     deletingEventId:
-      weddingEvents.deletingEventId,
+      weddingEvents
+        .deletingEventId,
 
     loadEvents:
       weddingEvents.loadEvents,
@@ -706,23 +955,38 @@ export default function useWeddingBuilder() {
       weddingEvents.removeEvent,
 
     getWeddingUrl:
-      weddingEvents.getWeddingUrl,
+      weddingEvents
+        .getWeddingUrl,
 
     copyWeddingUrl:
-      weddingEvents.copyWeddingUrl,
+      weddingEvents
+        .copyWeddingUrl,
 
     copyGeneratedUrl:
-      weddingEvents.copyGeneratedUrl,
+      weddingEvents
+        .copyGeneratedUrl,
 
     formatDate:
-      weddingEvents.formatEventDate,
+      weddingEvents
+        .formatEventDate,
 
     findEventById:
-      weddingEvents.findEventById,
+      weddingEvents
+        .findEventById,
 
     findEventBySlug:
-      weddingEvents.findEventBySlug,
+      weddingEvents
+        .findEventBySlug,
 
+    /*
+     * =================================================
+     * AJUSTES
+     * =================================================
+     *
+     * Dejamos TODOS disponibles para que en el
+     * siguiente paso podamos conectar el sidebar
+     * y mejorar visualmente el admin.
+     */
     settings:
       adminSettings.settings,
 
@@ -732,23 +996,74 @@ export default function useWeddingBuilder() {
     businessName:
       adminSettings.businessName,
 
+    sidebarSubtitle:
+      adminSettings
+        .sidebarSubtitle,
+
     defaultMessage:
       adminSettings.defaultMessage,
 
+    defaultGuestBookTitle:
+      adminSettings
+        .defaultGuestBookTitle,
+
+    defaultThemeMode:
+      adminSettings
+        .defaultThemeMode,
+
+    allowThemeToggle:
+      adminSettings
+        .allowThemeToggle,
+
+    confirmBeforeDelete:
+      adminSettings
+        .confirmBeforeDelete,
+
+    confirmBeforeReset:
+      adminSettings
+        .confirmBeforeReset,
+
+    openCreatedInvitation:
+      adminSettings
+        .openCreatedInvitation,
+
+    compactSidebar:
+      adminSettings
+        .compactSidebar,
+
+    lastSavedAt:
+      adminSettings.lastSavedAt,
+
     hasUnsavedChanges:
-      adminSettings.hasUnsavedChanges,
+      adminSettings
+        .hasUnsavedChanges,
 
     updateSetting:
-      adminSettings.updateSetting,
+      adminSettings
+        .updateSetting,
+
+    getSetting:
+      adminSettings.getSetting,
 
     handleSettingChange:
-      adminSettings.handleSettingChange,
+      adminSettings
+        .handleSettingChange,
 
     handleBusinessNameChange:
-      adminSettings.handleBusinessNameChange,
+      adminSettings
+        .handleBusinessNameChange,
+
+    handleSidebarSubtitleChange:
+      adminSettings
+        .handleSidebarSubtitleChange,
 
     handleDefaultMessageChange:
-      adminSettings.handleDefaultMessageChange,
+      adminSettings
+        .handleDefaultMessageChange,
+
+    handleDefaultGuestBookTitleChange:
+      adminSettings
+        .handleDefaultGuestBookTitleChange,
 
     saveSettings:
       adminSettings.saveSettings,
@@ -759,6 +1074,9 @@ export default function useWeddingBuilder() {
     reloadSettings:
       adminSettings.reloadSettings,
 
+    /*
+     * Acciones principales
+     */
     applyDefaultMessage,
 
     handleSubmit,
@@ -768,6 +1086,9 @@ export default function useWeddingBuilder() {
     resetBuilder,
     clearBuilderAfterCreation,
 
+    /*
+     * Resumen
+     */
     previewDate,
     builderSummary
   };

@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 function cleanText(value) {
   if (typeof value !== 'string') {
@@ -9,402 +8,570 @@ function cleanText(value) {
   return value.trim();
 }
 
-function normalizeText(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+function getEventId(event = {}) {
+  return event._id || event.id || event.slug || '';
 }
 
-function getEventId(event) {
-  if (!event || typeof event !== 'object') {
-    return '';
+function getCoupleName(event = {}) {
+  const groom = cleanText(event.groomName);
+  const bride = cleanText(event.brideName);
+
+  if (groom && bride) {
+    return `${groom} & ${bride}`;
   }
 
-  return cleanText(
-    String(
-      event._id ||
-        event.id ||
-        event.slug ||
-        ''
-    )
+  return groom || bride || 'Invitación sin nombre';
+}
+
+function getLocation(event = {}) {
+  return (
+    cleanText(event?.location?.venueName) ||
+    cleanText(event?.location?.name) ||
+    cleanText(event?.venue?.name) ||
+    cleanText(event.venueName) ||
+    cleanText(event.locationName) ||
+    cleanText(event.lugar) ||
+    ''
   );
 }
 
-function getEventSlug(event) {
-  return cleanText(event?.slug);
-}
-
-function getCoupleTitle(event) {
-  const groomName = cleanText(
-    event?.groomName ||
-      event?.novio
-  );
-
-  const brideName = cleanText(
-    event?.brideName ||
-      event?.novia
-  );
-
-  if (groomName && brideName) {
-    return `${groomName} y ${brideName}`;
-  }
-
-  return groomName || brideName || 'Invitación';
-}
-
-function getVenueName(event) {
-  return cleanText(
-    event?.location?.venueName ||
-      event?.venue?.name ||
-      event?.venueName
+function getAddress(event = {}) {
+  return (
+    cleanText(event?.location?.venueAddress) ||
+    cleanText(event?.location?.address) ||
+    cleanText(event?.venue?.address) ||
+    cleanText(event.venueAddress) ||
+    cleanText(event.address) ||
+    ''
   );
 }
 
-function getVenueAddress(event) {
-  return cleanText(
-    event?.location?.venueAddress ||
-      event?.venue?.address ||
-      event?.venueAddress
-  );
-}
+function getDateTimestamp(event = {}) {
+  const value =
+    event.eventDate ||
+    event.date ||
+    event.weddingDate ||
+    '';
 
-function parseEventDate(value, useEndOfDay = false) {
-  const dateValue = cleanText(value);
-
-  if (!dateValue) {
+  if (!value) {
     return null;
   }
 
-  const dateOnlyMatch = dateValue.match(
-    /^(\d{4})-(\d{2})-(\d{2})$/
-  );
+  const date = new Date(value);
+  const timestamp = date.getTime();
 
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-
-    const parsedDate = new Date(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      useEndOfDay ? 23 : 12,
-      useEndOfDay ? 59 : 0,
-      useEndOfDay ? 59 : 0,
-      useEndOfDay ? 999 : 0
-    );
-
-    return Number.isNaN(parsedDate.getTime())
-      ? null
-      : parsedDate;
+  if (Number.isNaN(timestamp)) {
+    return null;
   }
 
-  const parsedDate = new Date(dateValue);
-
-  return Number.isNaN(parsedDate.getTime())
-    ? null
-    : parsedDate;
+  return timestamp;
 }
 
-function getEventTimestamp(event) {
-  const parsedDate = parseEventDate(
-    event?.eventDate ||
-      event?.fecha,
-    true
-  );
+function getCreatedTimestamp(event = {}) {
+  const value =
+    event.createdAt ||
+    event.updatedAt ||
+    event.eventDate ||
+    '';
 
-  return parsedDate
-    ? parsedDate.getTime()
-    : 0;
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = new Date(value).getTime();
+
+  return Number.isNaN(timestamp)
+    ? 0
+    : timestamp;
 }
 
-function getEventStatus(event) {
-  const timestamp = getEventTimestamp(event);
+function getEventStatus(event = {}) {
+  const timestamp = getDateTimestamp(event);
 
   if (!timestamp) {
-    return {
-      key: 'pending',
-      label: 'Sin fecha'
-    };
+    return 'no-date';
   }
 
   if (timestamp < Date.now()) {
+    return 'finished';
+  }
+
+  return 'upcoming';
+}
+
+function getStatusInformation(status) {
+  if (status === 'upcoming') {
     return {
-      key: 'finished',
-      label: 'Evento finalizado'
+      label: 'Próximo evento',
+      icon: '◷',
+      color: 'var(--admin-success, #67c89b)',
+      background:
+        'var(--admin-success-soft, rgba(69,160,117,.12))'
+    };
+  }
+
+  if (status === 'finished') {
+    return {
+      label: 'Evento finalizado',
+      icon: '✓',
+      color: 'var(--admin-text-muted, #707d90)',
+      background:
+        'var(--admin-surface-muted, #192332)'
     };
   }
 
   return {
-    key: 'upcoming',
-    label: 'Próximo evento'
+    label: 'Sin fecha',
+    icon: '○',
+    color: 'var(--admin-warning, #d8b65f)',
+    background:
+      'var(--admin-warning-soft, rgba(190,145,40,.11))'
   };
 }
 
-function formatEventDate(dateValue, formatDate) {
-  const normalizedDate = cleanText(dateValue);
-
-  if (!normalizedDate) {
-    return '';
-  }
-
-  const parsedDate = parseEventDate(normalizedDate);
-
-  if (!parsedDate) {
-    return '';
-  }
-
-  if (typeof formatDate === 'function') {
-    try {
-      const formattedValue = cleanText(
-        formatDate(normalizedDate)
-      );
-
-      if (formattedValue) {
-        return formattedValue;
-      }
-    } catch {
-      // Usamos el formateador seguro de esta sección.
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) {
+      return false;
     }
-  }
 
-  const hasTime =
-    /T\d{2}:\d{2}/.test(normalizedDate) ||
-    /\s\d{2}:\d{2}/.test(normalizedDate);
+    return window.matchMedia(query).matches;
+  });
 
-  return new Intl.DateTimeFormat(
-    'es-MX',
-    hasTime
-      ? {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }
-      : {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        }
-  ).format(parsedDate);
+  React.useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(query);
+
+    function handleChange(event) {
+      setMatches(event.matches);
+    }
+
+    setMatches(mediaQuery.matches);
+
+    mediaQuery.addEventListener?.(
+      'change',
+      handleChange
+    );
+
+    return () => {
+      mediaQuery.removeEventListener?.(
+        'change',
+        handleChange
+      );
+    };
+  }, [query]);
+
+  return matches;
 }
 
-function EventStatistic({
+function Icon({
+  type,
+  size = 18
+}) {
+  const props = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: '1.8',
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+    style: {
+      display: 'block',
+      width: size,
+      height: size,
+      minWidth: size,
+      maxWidth: size,
+      minHeight: size,
+      maxHeight: size
+    }
+  };
+
+  if (type === 'refresh') {
+    return (
+      <svg {...props}>
+        <path d="M20 6v5h-5" />
+        <path d="M4 18v-5h5" />
+        <path d="M18.5 9a7 7 0 0 0-11.9-2.5L5 8" />
+        <path d="M5.5 15a7 7 0 0 0 11.9 2.5L19 16" />
+      </svg>
+    );
+  }
+
+  if (type === 'plus') {
+    return (
+      <svg {...props}>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    );
+  }
+
+  if (type === 'search') {
+    return (
+      <svg {...props}>
+        <circle
+          cx="11"
+          cy="11"
+          r="7"
+        />
+        <path d="m20 20-4-4" />
+      </svg>
+    );
+  }
+
+  if (type === 'calendar') {
+    return (
+      <svg {...props}>
+        <rect
+          x="3"
+          y="5"
+          width="18"
+          height="16"
+          rx="2"
+        />
+        <path d="M8 3v4" />
+        <path d="M16 3v4" />
+        <path d="M3 10h18" />
+      </svg>
+    );
+  }
+
+  if (type === 'location') {
+    return (
+      <svg {...props}>
+        <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+        <circle
+          cx="12"
+          cy="10"
+          r="2.5"
+        />
+      </svg>
+    );
+  }
+
+  if (type === 'link') {
+    return (
+      <svg {...props}>
+        <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
+        <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" />
+      </svg>
+    );
+  }
+
+  if (type === 'external') {
+    return (
+      <svg {...props}>
+        <path d="M14 5h5v5" />
+        <path d="M10 14 19 5" />
+        <path d="M19 13v6H5V5h6" />
+      </svg>
+    );
+  }
+
+  if (type === 'copy') {
+    return (
+      <svg {...props}>
+        <rect
+          x="8"
+          y="8"
+          width="11"
+          height="11"
+          rx="2"
+        />
+        <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+      </svg>
+    );
+  }
+
+  if (type === 'trash') {
+    return (
+      <svg {...props}>
+        <path d="M4 7h16" />
+        <path d="M9 7V4h6v3" />
+        <path d="M7 7l1 13h8l1-13" />
+        <path d="M10 11v5" />
+        <path d="M14 11v5" />
+      </svg>
+    );
+  }
+
+  if (type === 'heart') {
+    return (
+      <svg {...props}>
+        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
+function Metric({
   label,
   value,
-  description
+  detail,
+  icon
 }) {
   return (
-    <article className="event-statistic-card">
-      <span>{label}</span>
+    <div
+      style={{
+        display: 'grid',
+        minWidth: 0,
+        gridTemplateColumns:
+          '34px minmax(0, 1fr)',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '14px 15px'
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          display: 'grid',
+          width: '34px',
+          height: '34px',
+          placeItems: 'center',
+          border:
+            '1px solid var(--admin-border)',
+          borderRadius: '10px',
+          background:
+            'var(--admin-surface-soft)',
+          color:
+            'var(--admin-accent)',
+          fontSize: '14px'
+        }}
+      >
+        {icon}
+      </span>
 
-      <strong>{value}</strong>
+      <div
+        style={{
+          display: 'flex',
+          minWidth: 0,
+          flexDirection: 'column',
+          gap: '2px'
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: '5px'
+          }}
+        >
+          <strong
+            style={{
+              color:
+                'var(--admin-text)',
+              fontSize: '16px',
+              fontWeight: 800,
+              lineHeight: 1
+            }}
+          >
+            {value}
+          </strong>
 
-      {description && (
-        <small>{description}</small>
-      )}
-    </article>
+          <span
+            style={{
+              color:
+                'var(--admin-text-secondary)',
+              fontSize: '9px',
+              fontWeight: 700
+            }}
+          >
+            {label}
+          </span>
+        </div>
+
+        <small
+          style={{
+            color:
+              'var(--admin-text-muted)',
+            fontSize: '7px'
+          }}
+        >
+          {detail}
+        </small>
+      </div>
+    </div>
   );
 }
 
-function EventCard({
-  event,
-  deleting = false,
-  onDelete,
-  onCopy,
-  getWeddingUrl,
-  formatDate
-}) {
-  const eventId = getEventId(event);
-  const slug = getEventSlug(event);
-  const coupleTitle = getCoupleTitle(event);
-  const status = getEventStatus(event);
-
-  const eventDate = cleanText(
-    event?.eventDate ||
-      event?.fecha
-  );
-
-  const formattedDate = formatEventDate(
-    eventDate,
-    formatDate
-  );
-
-  const venueName = getVenueName(event);
-  const venueAddress = getVenueAddress(event);
-
-  const weddingPath = slug
-    ? `/boda/${encodeURIComponent(slug)}`
-    : '';
-
-  const publicUrl =
-    slug &&
-    typeof getWeddingUrl === 'function'
-      ? cleanText(getWeddingUrl(event))
-      : '';
-
-  const hasInformation = Boolean(
-    formattedDate ||
-      slug ||
-      venueName ||
-      venueAddress
-  );
-
-  async function handleCopy() {
-    if (
-      !publicUrl ||
-      typeof onCopy !== 'function'
-    ) {
-      return;
-    }
-
-    await onCopy(event);
-  }
-
-  async function handleDelete() {
-    if (
-      !eventId ||
-      typeof onDelete !== 'function'
-    ) {
-      return;
-    }
-
-    await onDelete(eventId);
-  }
-
+function LoadingState() {
   return (
-    <article className="event-card">
-      <div className="event-card-header">
-        <div className="event-card-couple">
-          <span
-            className="event-card-avatar"
-            aria-hidden="true"
-          >
-            ♡
-          </span>
-
-          <div>
-            <span className="event-card-label">
-              Invitación de boda
-            </span>
-
-            <h3>{coupleTitle}</h3>
-          </div>
-        </div>
-
+    <div
+      style={{
+        display: 'grid',
+        minHeight: '300px',
+        placeItems: 'center',
+        border:
+          '1px solid var(--admin-border)',
+        borderRadius: '18px',
+        background:
+          'var(--admin-surface)'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '12px',
+          color:
+            'var(--admin-text-secondary)'
+        }}
+      >
         <span
-          className={`event-status-badge ${status.key}`}
+          style={{
+            width: '32px',
+            height: '32px',
+            border:
+              '3px solid var(--admin-border)',
+            borderTopColor:
+              'var(--admin-accent)',
+            borderRadius: '50%'
+          }}
+        />
+
+        <strong
+          style={{
+            fontSize: '10px'
+          }}
         >
-          {status.label}
-        </span>
+          Cargando invitaciones...
+        </strong>
       </div>
+    </div>
+  );
+}
 
-      {hasInformation && (
-        <div className="event-card-information">
-          {formattedDate && (
-            <div className="event-card-detail">
-              <span>Fecha</span>
+function EmptyState({
+  filtered = false,
+  onCreateNew
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        minHeight: '330px',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border:
+          '1px dashed var(--admin-border-strong)',
+        borderRadius: '18px',
+        padding: '32px',
+        background:
+          'var(--admin-surface-soft)',
+        textAlign: 'center'
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          display: 'grid',
+          width: '52px',
+          height: '52px',
+          marginBottom: '16px',
+          placeItems: 'center',
+          border:
+            '1px solid var(--admin-border)',
+          borderRadius: '16px',
+          background:
+            'var(--admin-surface)',
+          color:
+            'var(--admin-accent)'
+        }}
+      >
+        <Icon
+          type="heart"
+          size={20}
+        />
+      </span>
 
-              <strong>
-                {formattedDate}
-              </strong>
-            </div>
-          )}
+      <h3
+        style={{
+          margin: 0,
+          color:
+            'var(--admin-text)',
+          fontSize: '17px',
+          fontWeight: 700
+        }}
+      >
+        {filtered
+          ? 'No encontramos invitaciones'
+          : 'Todavía no hay invitaciones'}
+      </h3>
 
-          {slug && (
-            <div className="event-card-detail">
-              <span>Identificador</span>
+      <p
+        style={{
+          maxWidth: '420px',
+          margin: '8px 0 0',
+          color:
+            'var(--admin-text-secondary)',
+          fontSize: '9px',
+          lineHeight: 1.65
+        }}
+      >
+        {filtered
+          ? 'Prueba con otra búsqueda o cambia los filtros.'
+          : 'Crea tu primera invitación y aparecerá automáticamente en esta sección.'}
+      </p>
 
-              <strong>{slug}</strong>
-            </div>
-          )}
-
-          {venueName && (
-            <div className="event-card-detail">
-              <span>Lugar</span>
-
-              <strong>
-                {venueName}
-              </strong>
-            </div>
-          )}
-
-          {venueAddress && (
-            <div className="event-card-detail">
-              <span>Dirección</span>
-
-              <strong>
-                {venueAddress}
-              </strong>
-            </div>
-          )}
-        </div>
-      )}
-
-      {publicUrl && (
-        <div className="event-url-box">
-          <div>
-            <span>Enlace público</span>
-
-            <strong title={publicUrl}>
-              {publicUrl}
-            </strong>
-          </div>
-
+      {!filtered &&
+        typeof onCreateNew ===
+          'function' && (
           <button
             type="button"
-            className="copy-url-button"
-            onClick={handleCopy}
+            onClick={onCreateNew}
+            style={{
+              display: 'inline-flex',
+              minHeight: '40px',
+              alignItems: 'center',
+              justifyContent:
+                'center',
+              gap: '7px',
+              marginTop: '18px',
+              border:
+                '1px solid var(--admin-accent)',
+              borderRadius: '11px',
+              padding: '0 15px',
+              background:
+                'var(--admin-accent)',
+              color: '#0a111b',
+              fontSize: '9px',
+              fontWeight: 800,
+              cursor: 'pointer'
+            }}
           >
-            Copiar
-          </button>
-        </div>
-      )}
+            <Icon
+              type="plus"
+              size={14}
+            />
 
-      <div className="event-card-actions">
-        {weddingPath && (
-          <Link
-            className="primary-button compact-button"
-            to={weddingPath}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Abrir invitación
-          </Link>
-        )}
-
-        {publicUrl && (
-          <button
-            type="button"
-            className="secondary-button compact-button"
-            onClick={handleCopy}
-          >
-            Copiar enlace
-          </button>
-        )}
-
-        {eventId && (
-          <button
-            type="button"
-            className="danger-button compact-button"
-            onClick={handleDelete}
-            disabled={deleting}
-          >
-            {deleting
-              ? 'Eliminando...'
-              : 'Eliminar'}
+            Crear invitación
           </button>
         )}
-      </div>
-    </article>
+    </div>
   );
 }
 
 export default function EventsSection({
   events = [],
   loadingEvents = false,
-  deletingEventId = null,
+  deletingEventId = '',
   loadEvents,
   handleDelete,
   copyWeddingUrl,
@@ -412,268 +579,579 @@ export default function EventsSection({
   formatDate,
   onCreateNew
 }) {
-  const [searchTerm, setSearchTerm] =
+  const isTablet = useMediaQuery(
+    '(max-width: 980px)'
+  );
+
+  const isPhone = useMediaQuery(
+    '(max-width: 620px)'
+  );
+
+  const [search, setSearch] =
     useState('');
 
   const [statusFilter, setStatusFilter] =
     useState('all');
 
   const [sortOrder, setSortOrder] =
-    useState('newest');
+    useState('recent');
 
-  const normalizedEvents = Array.isArray(events)
-    ? events.filter(
-        (event) =>
-          event &&
-          typeof event === 'object'
-      )
-    : [];
+  const normalizedEvents =
+    Array.isArray(events)
+      ? events
+      : [];
 
   const statistics = useMemo(() => {
-    const now = Date.now();
-
-    let upcoming = 0;
-    let finished = 0;
-    let pendingDate = 0;
-
-    normalizedEvents.forEach((event) => {
-      const timestamp =
-        getEventTimestamp(event);
-
-      if (!timestamp) {
-        pendingDate += 1;
-        return;
-      }
-
-      if (timestamp >= now) {
-        upcoming += 1;
-        return;
-      }
-
-      finished += 1;
-    });
-
-    return {
-      total: normalizedEvents.length,
-      upcoming,
-      finished,
-      pendingDate
-    };
-  }, [normalizedEvents]);
-
-  const visibleEvents = useMemo(() => {
-    const search = normalizeText(searchTerm);
-
-    const filteredEvents =
-      normalizedEvents.filter((event) => {
+    return normalizedEvents.reduce(
+      (result, event) => {
         const status =
           getEventStatus(event);
 
-        if (
-          statusFilter !== 'all' &&
-          status.key !== statusFilter
-        ) {
-          return false;
+        result.total += 1;
+
+        if (status === 'upcoming') {
+          result.upcoming += 1;
         }
 
-        if (!search) {
-          return true;
+        if (status === 'finished') {
+          result.finished += 1;
         }
 
-        const searchableText = normalizeText(
-          [
-            event?.groomName,
-            event?.brideName,
-            event?.novio,
-            event?.novia,
-            event?.slug,
-            getVenueName(event),
-            getVenueAddress(event)
-          ].join(' ')
-        );
-
-        return searchableText.includes(search);
-      });
-
-    return [...filteredEvents].sort(
-      (firstEvent, secondEvent) => {
-        if (sortOrder === 'name') {
-          return getCoupleTitle(
-            firstEvent
-          ).localeCompare(
-            getCoupleTitle(secondEvent),
-            'es',
-            {
-              sensitivity: 'base'
-            }
-          );
+        if (status === 'no-date') {
+          result.noDate += 1;
         }
 
-        const firstTimestamp =
-          getEventTimestamp(firstEvent);
-
-        const secondTimestamp =
-          getEventTimestamp(secondEvent);
-
-        if (sortOrder === 'oldest') {
-          if (!firstTimestamp) {
-            return 1;
-          }
-
-          if (!secondTimestamp) {
-            return -1;
-          }
-
-          return (
-            firstTimestamp -
-            secondTimestamp
-          );
-        }
-
-        if (!firstTimestamp) {
-          return 1;
-        }
-
-        if (!secondTimestamp) {
-          return -1;
-        }
-
-        return (
-          secondTimestamp -
-          firstTimestamp
-        );
+        return result;
+      },
+      {
+        total: 0,
+        upcoming: 0,
+        finished: 0,
+        noDate: 0
       }
     );
+  }, [normalizedEvents]);
+
+  const visibleEvents = useMemo(() => {
+    const query = search
+      .trim()
+      .toLowerCase();
+
+    const result =
+      normalizedEvents.filter(
+        (event) => {
+          const status =
+            getEventStatus(event);
+
+          if (
+            statusFilter !== 'all' &&
+            status !== statusFilter
+          ) {
+            return false;
+          }
+
+          if (!query) {
+            return true;
+          }
+
+          const searchableText = [
+            getCoupleName(event),
+            event.groomName,
+            event.brideName,
+            event.slug,
+            event._id,
+            event.id,
+            getLocation(event),
+            getAddress(event)
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return searchableText.includes(
+            query
+          );
+        }
+      );
+
+    result.sort((first, second) => {
+      if (sortOrder === 'oldest') {
+        return (
+          getCreatedTimestamp(first) -
+          getCreatedTimestamp(second)
+        );
+      }
+
+      if (
+        sortOrder === 'event-date'
+      ) {
+        const firstDate =
+          getDateTimestamp(first) ??
+          Number.MAX_SAFE_INTEGER;
+
+        const secondDate =
+          getDateTimestamp(second) ??
+          Number.MAX_SAFE_INTEGER;
+
+        return firstDate - secondDate;
+      }
+
+      return (
+        getCreatedTimestamp(second) -
+        getCreatedTimestamp(first)
+      );
+    });
+
+    return result;
   }, [
     normalizedEvents,
-    searchTerm,
+    search,
     sortOrder,
     statusFilter
   ]);
 
-  const filtersAreActive = Boolean(
-    searchTerm ||
-      statusFilter !== 'all' ||
-      sortOrder !== 'newest'
-  );
+  function resolveWeddingUrl(event) {
+    if (
+      typeof getWeddingUrl ===
+      'function'
+    ) {
+      try {
+        const resolvedUrl =
+          getWeddingUrl(event);
 
-  function handleSearchChange(event) {
-    setSearchTerm(event.target.value);
+        if (
+          typeof resolvedUrl ===
+            'string' &&
+          resolvedUrl &&
+          !resolvedUrl.includes(
+            '[object Object]'
+          )
+        ) {
+          return resolvedUrl;
+        }
+      } catch {
+        // Fallback local debajo.
+      }
+    }
+
+    const slug = cleanText(
+      event?.slug
+    );
+
+    if (!slug) {
+      return '';
+    }
+
+    if (typeof window === 'undefined') {
+      return `/boda/${encodeURIComponent(
+        slug
+      )}`;
+    }
+
+    return `${
+      window.location.origin
+    }/boda/${encodeURIComponent(
+      slug
+    )}`;
   }
 
-  function clearFilters() {
-    setSearchTerm('');
-    setStatusFilter('all');
-    setSortOrder('newest');
+  function formatWeddingDate(event) {
+    const value =
+      event?.eventDate ||
+      event?.date ||
+      event?.weddingDate;
+
+    if (!value) {
+      return 'Sin fecha definida';
+    }
+
+    if (
+      typeof formatDate ===
+      'function'
+    ) {
+      try {
+        const result =
+          formatDate(value);
+
+        if (result) {
+          return result;
+        }
+      } catch {
+        // Fallback debajo.
+      }
+    }
+
+    const date = new Date(value);
+
+    if (
+      Number.isNaN(date.getTime())
+    ) {
+      return String(value);
+    }
+
+    return new Intl.DateTimeFormat(
+      'es-MX',
+      {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }
+    ).format(date);
   }
 
-  async function handleRefresh() {
-    if (typeof loadEvents !== 'function') {
+  async function handleCopy(event) {
+    if (
+      typeof copyWeddingUrl ===
+      'function'
+    ) {
+      try {
+        await copyWeddingUrl(event);
+        return;
+      } catch {
+        // Si el hook falla,
+        // usamos clipboard como respaldo.
+      }
+    }
+
+    const url =
+      resolveWeddingUrl(event);
+
+    if (
+      url &&
+      typeof navigator !==
+        'undefined' &&
+      navigator.clipboard
+    ) {
+      await navigator.clipboard.writeText(
+        url
+      );
+    }
+  }
+
+  function handleRemove(event) {
+    const id = getEventId(event);
+
+    if (
+      !id ||
+      typeof handleDelete !==
+        'function'
+    ) {
       return;
     }
 
-    await loadEvents();
+    handleDelete(id);
   }
 
-  function handleCreateNew() {
-    if (typeof onCreateNew === 'function') {
-      onCreateNew();
-    }
-  }
+  const topButtonStyle = {
+    display: 'inline-flex',
+    minHeight: '41px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    border:
+      '1px solid var(--admin-border)',
+    borderRadius: '11px',
+    padding: '0 14px',
+    background:
+      'var(--admin-surface)',
+    color:
+      'var(--admin-text-secondary)',
+    fontSize: '9px',
+    fontWeight: 750,
+    cursor: 'pointer'
+  };
+
+  const inputStyle = {
+    width: '100%',
+    minHeight: '42px',
+    border:
+      '1px solid var(--admin-border)',
+    borderRadius: '11px',
+    outline: 0,
+    background:
+      'var(--admin-input)',
+    color:
+      'var(--admin-text)',
+    fontSize: '9px'
+  };
 
   return (
-    <section className="dashboard-section events-section">
-      <div className="dashboard-page-header">
+    <section
+      className="events-premium-page"
+      style={{
+        display: 'grid',
+        width: '100%',
+        gap: '22px'
+      }}
+    >
+      {/* =================================================
+          HEADER
+      ================================================== */}
+
+      <header
+        style={{
+          display: 'flex',
+          alignItems: isTablet
+            ? 'stretch'
+            : 'flex-end',
+          justifyContent:
+            'space-between',
+          flexDirection: isTablet
+            ? 'column'
+            : 'row',
+          gap: '20px'
+        }}
+      >
         <div>
-          <span className="section-eyebrow">
+          <span
+            style={{
+              display: 'block',
+              marginBottom: '7px',
+              color:
+                'var(--admin-accent)',
+              fontSize: '7px',
+              fontWeight: 900,
+              letterSpacing: '.17em',
+              textTransform: 'uppercase'
+            }}
+          >
             Administración
           </span>
 
-          <h1>Mis eventos</h1>
+          <h1
+            style={{
+              margin: 0,
+              color:
+                'var(--admin-text)',
+              fontSize: isPhone
+                ? '28px'
+                : '38px',
+              fontWeight: 720,
+              lineHeight: 1.05,
+              letterSpacing:
+                '-.045em'
+            }}
+          >
+            Mis eventos
+          </h1>
 
-          <p>
-            Consulta las invitaciones creadas,
-            abre sus enlaces públicos o elimina
-            los eventos que ya no necesites.
+          <p
+            style={{
+              maxWidth: '680px',
+              margin: '10px 0 0',
+              color:
+                'var(--admin-text-secondary)',
+              fontSize: '10px',
+              lineHeight: 1.65
+            }}
+          >
+            Consulta tus invitaciones,
+            revisa sus enlaces públicos y
+            administra cada evento desde un
+            solo lugar.
           </p>
         </div>
 
-        <div className="dashboard-page-header-actions">
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px'
+          }}
+        >
           <button
             type="button"
-            className="secondary-button"
-            onClick={handleRefresh}
+            style={topButtonStyle}
+            onClick={() =>
+              loadEvents?.()
+            }
             disabled={loadingEvents}
           >
-            {loadingEvents
-              ? 'Actualizando...'
-              : 'Actualizar'}
+            <Icon
+              type="refresh"
+              size={14}
+            />
+
+            Actualizar
           </button>
 
           <button
             type="button"
-            className="primary-button"
-            onClick={handleCreateNew}
+            onClick={() =>
+              onCreateNew?.()
+            }
+            style={{
+              ...topButtonStyle,
+              borderColor:
+                'var(--admin-accent)',
+              background:
+                'linear-gradient(135deg, var(--admin-accent-bright), var(--admin-accent))',
+              color: '#0a111b',
+              fontWeight: 820
+            }}
           >
-            + Crear invitación
+            <Icon
+              type="plus"
+              size={14}
+            />
+
+            Crear invitación
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="events-statistics-grid">
-        <EventStatistic
-          label="Total"
+      {/* =================================================
+          MÉTRICAS
+      ================================================== */}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isPhone
+            ? 'repeat(2, minmax(0, 1fr))'
+            : 'repeat(4, minmax(0, 1fr))',
+          overflow: 'hidden',
+          border:
+            '1px solid var(--admin-border)',
+          borderRadius: '17px',
+          background:
+            'var(--admin-surface)'
+        }}
+      >
+        <Metric
+          icon="▦"
           value={statistics.total}
-          description="invitaciones"
+          label="Total"
+          detail="invitaciones"
         />
 
-        <EventStatistic
-          label="Próximos"
+        <Metric
+          icon="◷"
           value={statistics.upcoming}
-          description="eventos"
+          label="Próximos"
+          detail="eventos"
         />
 
-        <EventStatistic
-          label="Finalizados"
+        <Metric
+          icon="✓"
           value={statistics.finished}
-          description="eventos"
+          label="Finalizados"
+          detail="eventos"
         />
 
-        <EventStatistic
+        <Metric
+          icon="○"
+          value={statistics.noDate}
           label="Sin fecha"
-          value={statistics.pendingDate}
-          description="eventos"
+          detail="eventos"
         />
       </div>
 
-      <div className="events-toolbar">
-        <div className="events-search-field">
-          <label htmlFor="eventSearch">
+      {/* =================================================
+          FILTROS
+      ================================================== */}
+
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isTablet
+            ? '1fr'
+            : 'minmax(260px, 1fr) 170px 190px',
+          gap: '11px',
+          border:
+            '1px solid var(--admin-border)',
+          borderRadius: '16px',
+          padding: '13px',
+          background:
+            'var(--admin-surface)'
+        }}
+      >
+        <label
+          style={{
+            display: 'grid',
+            gap: '6px'
+          }}
+        >
+          <span
+            style={{
+              color:
+                'var(--admin-text-secondary)',
+              fontSize: '8px',
+              fontWeight: 750
+            }}
+          >
             Buscar invitación
-          </label>
+          </span>
 
-          <input
-            id="eventSearch"
-            type="search"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            placeholder="Buscar por pareja, lugar o identificador"
-          />
-        </div>
+          <div
+            style={{
+              position: 'relative'
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '13px',
+                color:
+                  'var(--admin-text-muted)',
+                transform:
+                  'translateY(-50%)',
+                pointerEvents: 'none'
+              }}
+            >
+              <Icon
+                type="search"
+                size={14}
+              />
+            </span>
 
-        <div className="events-filter-field">
-          <label htmlFor="eventStatus">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value
+                )
+              }
+              placeholder="Pareja, lugar o identificador"
+              style={{
+                ...inputStyle,
+                padding:
+                  '0 13px 0 39px'
+              }}
+            />
+          </div>
+        </label>
+
+        <label
+          style={{
+            display: 'grid',
+            gap: '6px'
+          }}
+        >
+          <span
+            style={{
+              color:
+                'var(--admin-text-secondary)',
+              fontSize: '8px',
+              fontWeight: 750
+            }}
+          >
             Estado
-          </label>
+          </span>
 
           <select
-            id="eventStatus"
             value={statusFilter}
             onChange={(event) =>
               setStatusFilter(
                 event.target.value
               )
             }
+            style={{
+              ...inputStyle,
+              padding: '0 11px'
+            }}
           >
             <option value="all">
               Todos
@@ -687,150 +1165,843 @@ export default function EventsSection({
               Finalizados
             </option>
 
-            <option value="pending">
+            <option value="no-date">
               Sin fecha
             </option>
           </select>
-        </div>
+        </label>
 
-        <div className="events-filter-field">
-          <label htmlFor="eventSort">
+        <label
+          style={{
+            display: 'grid',
+            gap: '6px'
+          }}
+        >
+          <span
+            style={{
+              color:
+                'var(--admin-text-secondary)',
+              fontSize: '8px',
+              fontWeight: 750
+            }}
+          >
             Ordenar
-          </label>
+          </span>
 
           <select
-            id="eventSort"
             value={sortOrder}
             onChange={(event) =>
               setSortOrder(
                 event.target.value
               )
             }
+            style={{
+              ...inputStyle,
+              padding: '0 11px'
+            }}
           >
-            <option value="newest">
-              Fecha más reciente
+            <option value="recent">
+              Más reciente
+            </option>
+
+            <option value="event-date">
+              Fecha del evento
             </option>
 
             <option value="oldest">
-              Fecha más antigua
-            </option>
-
-            <option value="name">
-              Nombre de la pareja
+              Más antiguo
             </option>
           </select>
-        </div>
+        </label>
+      </section>
 
-        {filtersAreActive && (
-          <button
-            type="button"
-            className="text-button events-clear-filters"
-            onClick={clearFilters}
-          >
-            Limpiar filtros
-          </button>
-        )}
-      </div>
+      {/* =================================================
+          CONTENIDO
+      ================================================== */}
 
-      {loadingEvents &&
-      normalizedEvents.length === 0 ? (
-        <div className="events-loading-state">
-          <span
-            className="loading-spinner"
-            aria-hidden="true"
-          />
-
-          <strong>
-            Cargando eventos
-          </strong>
-
-          <p>
-            Obteniendo las invitaciones
-            registradas.
-          </p>
-        </div>
-      ) : visibleEvents.length > 0 ? (
-        <div className="events-grid">
+      {loadingEvents ? (
+        <LoadingState />
+      ) : normalizedEvents.length ===
+        0 ? (
+        <EmptyState
+          onCreateNew={onCreateNew}
+        />
+      ) : visibleEvents.length ===
+        0 ? (
+        <EmptyState filtered />
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gap: '14px'
+          }}
+        >
           {visibleEvents.map(
-            (event, index) => {
+            (event) => {
               const eventId =
                 getEventId(event);
 
-              const eventKey =
-                eventId ||
-                `event-${index}`;
+              const status =
+                getEventStatus(event);
+
+              const statusInformation =
+                getStatusInformation(
+                  status
+                );
+
+              const coupleName =
+                getCoupleName(event);
+
+              const location =
+                getLocation(event);
+
+              const address =
+                getAddress(event);
+
+              const url =
+                resolveWeddingUrl(event);
+
+              const deleting =
+                Boolean(
+                  deletingEventId &&
+                    String(
+                      deletingEventId
+                    ) ===
+                      String(eventId)
+                );
 
               return (
-                <EventCard
-                  key={eventKey}
-                  event={event}
-                  deleting={
-                    Boolean(eventId) &&
-                    deletingEventId ===
-                      eventId
-                  }
-                  onDelete={handleDelete}
-                  onCopy={copyWeddingUrl}
-                  getWeddingUrl={
-                    getWeddingUrl
-                  }
-                  formatDate={formatDate}
-                />
+                <article
+                  key={eventId}
+                  style={{
+                    position:
+                      'relative',
+                    overflow:
+                      'hidden',
+                    border:
+                      '1px solid var(--admin-border)',
+                    borderRadius:
+                      '18px',
+                    background:
+                      'linear-gradient(145deg, var(--admin-surface), var(--admin-surface-soft))',
+                    boxShadow:
+                      'var(--admin-shadow-xs)'
+                  }}
+                >
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position:
+                        'absolute',
+                      top: '-100px',
+                      right:
+                        '-100px',
+                      width: '250px',
+                      height: '250px',
+                      borderRadius:
+                        '50%',
+                      background:
+                        'radial-gradient(circle, var(--admin-accent-glow), transparent 70%)',
+                      pointerEvents:
+                        'none'
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      position:
+                        'relative',
+                      zIndex: 1,
+                      display: 'flex',
+                      alignItems:
+                        isTablet
+                          ? 'stretch'
+                          : 'flex-start',
+                      justifyContent:
+                        'space-between',
+                      flexDirection:
+                        isTablet
+                          ? 'column'
+                          : 'row',
+                      gap: '20px',
+                      padding:
+                        isPhone
+                          ? '18px'
+                          : '22px 23px'
+                    }}
+                  >
+                    {/* LEFT */}
+
+                    <div
+                      style={{
+                        minWidth: 0,
+                        flex: 1
+                      }}
+                    >
+                      <div
+                        style={{
+                          display:
+                            'flex',
+                          flexWrap:
+                            'wrap',
+                          alignItems:
+                            'center',
+                          gap: '8px',
+                          marginBottom:
+                            '13px'
+                        }}
+                      >
+                        <span
+                          style={{
+                            display:
+                              'inline-flex',
+                            minHeight:
+                              '25px',
+                            alignItems:
+                              'center',
+                            gap: '6px',
+                            borderRadius:
+                              '999px',
+                            padding:
+                              '0 9px',
+                            background:
+                              statusInformation.background,
+                            color:
+                              statusInformation.color,
+                            fontSize:
+                              '7px',
+                            fontWeight:
+                              800
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                          >
+                            {
+                              statusInformation.icon
+                            }
+                          </span>
+
+                          {
+                            statusInformation.label
+                          }
+                        </span>
+
+                        <span
+                          style={{
+                            color:
+                              'var(--admin-text-muted)',
+                            fontSize:
+                              '7px',
+                            fontWeight:
+                              700,
+                            letterSpacing:
+                              '.08em',
+                            textTransform:
+                              'uppercase'
+                          }}
+                        >
+                          Invitación de boda
+                        </span>
+                      </div>
+
+                      <h2
+                        style={{
+                          margin: 0,
+                          color:
+                            'var(--admin-text)',
+                          fontSize:
+                            isPhone
+                              ? '19px'
+                              : '23px',
+                          fontWeight:
+                            720,
+                          letterSpacing:
+                            '-.035em'
+                        }}
+                      >
+                        {coupleName}
+                      </h2>
+
+                      <div
+                        style={{
+                          display:
+                            'flex',
+                          flexWrap:
+                            'wrap',
+                          gap:
+                            '10px 20px',
+                          marginTop:
+                            '16px'
+                        }}
+                      >
+                        <div
+                          style={{
+                            display:
+                              'grid',
+                            gridTemplateColumns:
+                              '30px minmax(0,1fr)',
+                            alignItems:
+                              'center',
+                            gap: '9px',
+                            minWidth:
+                              '185px'
+                          }}
+                        >
+                          <span
+                            style={{
+                              display:
+                                'grid',
+                              width:
+                                '30px',
+                              height:
+                                '30px',
+                              placeItems:
+                                'center',
+                              border:
+                                '1px solid var(--admin-border)',
+                              borderRadius:
+                                '9px',
+                              background:
+                                'var(--admin-surface)',
+                              color:
+                                'var(--admin-accent)'
+                            }}
+                          >
+                            <Icon
+                              type="calendar"
+                              size={
+                                13
+                              }
+                            />
+                          </span>
+
+                          <div
+                            style={{
+                              display:
+                                'flex',
+                              flexDirection:
+                                'column',
+                              gap:
+                                '2px'
+                            }}
+                          >
+                            <span
+                              style={{
+                                color:
+                                  'var(--admin-text-muted)',
+                                fontSize:
+                                  '7px',
+                                textTransform:
+                                  'uppercase'
+                              }}
+                            >
+                              Fecha
+                            </span>
+
+                            <strong
+                              style={{
+                                color:
+                                  'var(--admin-text-secondary)',
+                                fontSize:
+                                  '9px',
+                                fontWeight:
+                                  700
+                              }}
+                            >
+                              {formatWeddingDate(
+                                event
+                              )}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {(location ||
+                          address) && (
+                          <div
+                            style={{
+                              display:
+                                'grid',
+                              gridTemplateColumns:
+                                '30px minmax(0,1fr)',
+                              alignItems:
+                                'center',
+                              gap: '9px',
+                              minWidth:
+                                '185px'
+                            }}
+                          >
+                            <span
+                              style={{
+                                display:
+                                  'grid',
+                                width:
+                                  '30px',
+                                height:
+                                  '30px',
+                                placeItems:
+                                  'center',
+                                border:
+                                  '1px solid var(--admin-border)',
+                                borderRadius:
+                                  '9px',
+                                background:
+                                  'var(--admin-surface)',
+                                color:
+                                  'var(--admin-accent)'
+                              }}
+                            >
+                              <Icon
+                                type="location"
+                                size={
+                                  13
+                                }
+                              />
+                            </span>
+
+                            <div
+                              style={{
+                                display:
+                                  'flex',
+                                minWidth:
+                                  0,
+                                flexDirection:
+                                  'column',
+                                gap:
+                                  '2px'
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color:
+                                    'var(--admin-text-muted)',
+                                  fontSize:
+                                    '7px',
+                                  textTransform:
+                                    'uppercase'
+                                }}
+                              >
+                                Lugar
+                              </span>
+
+                              <strong
+                                style={{
+                                  overflow:
+                                    'hidden',
+                                  color:
+                                    'var(--admin-text-secondary)',
+                                  fontSize:
+                                    '9px',
+                                  fontWeight:
+                                    700,
+                                  textOverflow:
+                                    'ellipsis',
+                                  whiteSpace:
+                                    'nowrap'
+                                }}
+                              >
+                                {location ||
+                                  address}
+                              </strong>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ID */}
+
+                    <div
+                      style={{
+                        width:
+                          isTablet
+                            ? '100%'
+                            : '210px',
+                        flexShrink: 0,
+                        borderLeft:
+                          isTablet
+                            ? 0
+                            : '1px solid var(--admin-border)',
+                        borderTop:
+                          isTablet
+                            ? '1px solid var(--admin-border)'
+                            : 0,
+                        paddingLeft:
+                          isTablet
+                            ? 0
+                            : '20px',
+                        paddingTop:
+                          isTablet
+                            ? '15px'
+                            : 0
+                      }}
+                    >
+                      <span
+                        style={{
+                          display:
+                            'block',
+                          color:
+                            'var(--admin-text-muted)',
+                          fontSize:
+                            '7px',
+                          fontWeight:
+                            800,
+                          letterSpacing:
+                            '.11em',
+                          textTransform:
+                            'uppercase'
+                        }}
+                      >
+                        Identificador
+                      </span>
+
+                      <strong
+                        style={{
+                          display:
+                            'block',
+                          marginTop:
+                            '6px',
+                          overflowWrap:
+                            'anywhere',
+                          color:
+                            'var(--admin-text-secondary)',
+                          fontSize:
+                            '9px',
+                          fontWeight:
+                            700
+                        }}
+                      >
+                        {cleanText(
+                          event.slug
+                        ) ||
+                          eventId ||
+                          'Sin identificador'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* URL */}
+
+                  {url && (
+                    <div
+                      style={{
+                        position:
+                          'relative',
+                        zIndex: 1,
+                        display:
+                          'grid',
+                        gridTemplateColumns:
+                          isPhone
+                            ? '1fr'
+                            : '30px minmax(0, 1fr) auto',
+                        alignItems:
+                          'center',
+                        gap: '10px',
+                        borderTop:
+                          '1px solid var(--admin-border)',
+                        borderBottom:
+                          '1px solid var(--admin-border)',
+                        padding:
+                          '11px 23px',
+                        background:
+                          'color-mix(in srgb, var(--admin-surface-soft) 72%, transparent)'
+                      }}
+                    >
+                      <span
+                        style={{
+                          display:
+                            'grid',
+                          width: '30px',
+                          height:
+                            '30px',
+                          placeItems:
+                            'center',
+                          borderRadius:
+                            '9px',
+                          color:
+                            'var(--admin-accent)'
+                        }}
+                      >
+                        <Icon
+                          type="link"
+                          size={13}
+                        />
+                      </span>
+
+                      <div
+                        style={{
+                          minWidth: 0
+                        }}
+                      >
+                        <span
+                          style={{
+                            display:
+                              'block',
+                            marginBottom:
+                              '3px',
+                            color:
+                              'var(--admin-text-muted)',
+                            fontSize:
+                              '7px',
+                            textTransform:
+                              'uppercase'
+                          }}
+                        >
+                          Enlace público
+                        </span>
+
+                        <strong
+                          style={{
+                            display:
+                              'block',
+                            overflow:
+                              'hidden',
+                            color:
+                              'var(--admin-text-secondary)',
+                            fontSize:
+                              '8px',
+                            fontWeight:
+                              650,
+                            textOverflow:
+                              'ellipsis',
+                            whiteSpace:
+                              'nowrap'
+                          }}
+                        >
+                          {url}
+                        </strong>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopy(
+                            event
+                          )
+                        }
+                        style={{
+                          display:
+                            'inline-flex',
+                          minHeight:
+                            '31px',
+                          alignItems:
+                            'center',
+                          justifyContent:
+                            'center',
+                          gap: '6px',
+                          border:
+                            '1px solid var(--admin-border)',
+                          borderRadius:
+                            '9px',
+                          padding:
+                            '0 10px',
+                          background:
+                            'var(--admin-surface)',
+                          color:
+                            'var(--admin-text-secondary)',
+                          fontSize:
+                            '8px',
+                          fontWeight:
+                            720,
+                          cursor:
+                            'pointer'
+                        }}
+                      >
+                        <Icon
+                          type="copy"
+                          size={12}
+                        />
+
+                        Copiar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ACTIONS */}
+
+                  <footer
+                    style={{
+                      position:
+                        'relative',
+                      zIndex: 1,
+                      display: 'flex',
+                      flexWrap:
+                        'wrap',
+                      alignItems:
+                        'center',
+                      justifyContent:
+                        'space-between',
+                      gap: '10px',
+                      padding:
+                        '13px 23px'
+                    }}
+                  >
+                    <span
+                      style={{
+                        color:
+                          'var(--admin-text-muted)',
+                        fontSize:
+                          '7px'
+                      }}
+                    >
+                      Gestiona esta invitación
+                      sin salir del panel.
+                    </span>
+
+                    <div
+                      style={{
+                        display:
+                          'flex',
+                        flexWrap:
+                          'wrap',
+                        gap:
+                          '7px'
+                      }}
+                    >
+                      {url && (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display:
+                              'inline-flex',
+                            minHeight:
+                              '36px',
+                            alignItems:
+                              'center',
+                            justifyContent:
+                              'center',
+                            gap: '7px',
+                            border:
+                              '1px solid var(--admin-accent)',
+                            borderRadius:
+                              '10px',
+                            padding:
+                              '0 12px',
+                            background:
+                              'linear-gradient(135deg, var(--admin-accent-bright), var(--admin-accent))',
+                            color:
+                              '#0a111b',
+                            fontSize:
+                              '8px',
+                            fontWeight:
+                              800,
+                            textDecoration:
+                              'none'
+                          }}
+                        >
+                          <Icon
+                            type="external"
+                            size={
+                              12
+                            }
+                          />
+
+                          Abrir invitación
+                        </a>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopy(
+                            event
+                          )
+                        }
+                        style={{
+                          display:
+                            'inline-flex',
+                          minHeight:
+                            '36px',
+                          alignItems:
+                            'center',
+                          justifyContent:
+                            'center',
+                          gap: '7px',
+                          border:
+                            '1px solid var(--admin-border)',
+                          borderRadius:
+                            '10px',
+                          padding:
+                            '0 12px',
+                          background:
+                            'var(--admin-surface)',
+                          color:
+                            'var(--admin-text-secondary)',
+                          fontSize:
+                            '8px',
+                          fontWeight:
+                            750,
+                          cursor:
+                            'pointer'
+                        }}
+                      >
+                        <Icon
+                          type="copy"
+                          size={12}
+                        />
+
+                        Copiar enlace
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() =>
+                          handleRemove(
+                            event
+                          )
+                        }
+                        style={{
+                          display:
+                            'inline-flex',
+                          minHeight:
+                            '36px',
+                          alignItems:
+                            'center',
+                          justifyContent:
+                            'center',
+                          gap: '7px',
+                          border:
+                            '1px solid color-mix(in srgb, var(--admin-danger) 25%, var(--admin-border))',
+                          borderRadius:
+                            '10px',
+                          padding:
+                            '0 12px',
+                          background:
+                            'transparent',
+                          color:
+                            'var(--admin-danger)',
+                          fontSize:
+                            '8px',
+                          fontWeight:
+                            750,
+                          cursor:
+                            deleting
+                              ? 'not-allowed'
+                              : 'pointer',
+                          opacity:
+                            deleting
+                              ? 0.5
+                              : 1
+                        }}
+                      >
+                        <Icon
+                          type="trash"
+                          size={12}
+                        />
+
+                        {deleting
+                          ? 'Eliminando...'
+                          : 'Eliminar'}
+                      </button>
+                    </div>
+                  </footer>
+                </article>
               );
             }
           )}
-        </div>
-      ) : normalizedEvents.length === 0 ? (
-        <div className="events-empty-state">
-          <span
-            className="events-empty-icon"
-            aria-hidden="true"
-          >
-            ♡
-          </span>
-
-          <h2>
-            Todavía no hay eventos
-          </h2>
-
-          <p>
-            Crea tu primera invitación para
-            que aparezca aquí.
-          </p>
-
-          <button
-            type="button"
-            className="primary-button"
-            onClick={handleCreateNew}
-          >
-            Crear primera invitación
-          </button>
-        </div>
-      ) : (
-        <div className="events-empty-state">
-          <span
-            className="events-empty-icon"
-            aria-hidden="true"
-          >
-            ⌕
-          </span>
-
-          <h2>
-            No encontramos resultados
-          </h2>
-
-          <p>
-            Ninguna invitación coincide con
-            los filtros seleccionados.
-          </p>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={clearFilters}
-          >
-            Limpiar filtros
-          </button>
         </div>
       )}
     </section>

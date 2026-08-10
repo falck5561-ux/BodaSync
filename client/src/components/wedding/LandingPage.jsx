@@ -64,7 +64,6 @@ function hasParentsData(wedding = {}) {
     wedding.parents?.groom?.mother,
     wedding.parents?.bride?.father,
     wedding.parents?.bride?.mother,
-
     wedding.parents?.groomFather,
     wedding.parents?.groomMother,
     wedding.parents?.brideFather,
@@ -151,6 +150,17 @@ function hasGiftData(wedding = {}) {
   );
 }
 
+/*
+ * =========================================================
+ * FONDO AMBIENTAL
+ * =========================================================
+ *
+ * DARK:
+ * dorado/negro de BodaSync.
+ *
+ * LIGHT:
+ * usa los colores seleccionados por el cliente.
+ */
 function AmbientBackground({
   isDark
 }) {
@@ -173,8 +183,17 @@ function AmbientBackground({
         className={`absolute -left-52 top-[10%] h-[520px] w-[520px] rounded-full blur-[170px] ${
           isDark
             ? 'bg-[#C5A059]/[0.04]'
-            : 'bg-[#C5A059]/[0.07]'
+            : ''
         }`}
+        style={
+          isDark
+            ? undefined
+            : {
+                backgroundColor:
+                  'var(--wedding-primary)',
+                opacity: 0.055
+              }
+        }
       />
 
       <motion.div
@@ -191,45 +210,62 @@ function AmbientBackground({
         className={`absolute -right-56 top-[55%] h-[540px] w-[540px] rounded-full blur-[180px] ${
           isDark
             ? 'bg-[#9E7A32]/[0.04]'
-            : 'bg-[#D4AF37]/[0.055]'
+            : ''
         }`}
+        style={
+          isDark
+            ? undefined
+            : {
+                backgroundColor:
+                  'var(--wedding-secondary)',
+                opacity: 0.055
+              }
+        }
       />
     </div>
   );
 }
 
+/*
+ * Contenedor visual de secciones.
+ *
+ * No agrega títulos ni contenido.
+ */
 function SectionFrame({
   children,
   isDark,
   variant = 'plain'
 }) {
-  const variantClass = {
-    plain: 'bg-transparent',
-
-    soft: isDark
-      ? 'bg-gradient-to-b from-transparent via-white/[0.012] to-transparent'
-      : 'bg-gradient-to-b from-transparent via-[#9E7A32]/[0.018] to-transparent',
-
-    glow: isDark
-      ? 'bg-gradient-to-b from-transparent via-[#C5A059]/[0.02] to-transparent'
-      : 'bg-gradient-to-b from-transparent via-[#D4AF37]/[0.025] to-transparent'
-  };
+  const hasGlow =
+    variant === 'glow';
 
   return (
     <div
       className={`relative isolate overflow-hidden ${
-        variantClass[variant] ||
-        variantClass.plain
+        variant === 'soft'
+          ? isDark
+            ? 'bg-gradient-to-b from-transparent via-white/[0.012] to-transparent'
+            : 'bg-white/[0.06]'
+          : ''
       }`}
     >
-      {variant === 'glow' && (
+      {hasGlow && (
         <div
           aria-hidden="true"
           className={`pointer-events-none absolute left-1/2 top-1/2 h-[450px] w-[450px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[160px] ${
             isDark
               ? 'bg-[#C5A059]/[0.02]'
-              : 'bg-[#D4AF37]/[0.035]'
+              : ''
           }`}
+          style={
+            isDark
+              ? undefined
+              : {
+                  backgroundColor:
+                    'var(--wedding-secondary)',
+                  opacity: 0.035
+                }
+          }
         />
       )}
 
@@ -247,7 +283,8 @@ function InvitationStatusScreen({
   actionLabel = '',
   onAction
 }) {
-  const styles = getStyles(isDark);
+  const styles =
+    getStyles(isDark);
 
   return (
     <div
@@ -276,8 +313,16 @@ function InvitationStatusScreen({
         className={`absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[160px] ${
           isDark
             ? 'bg-[#C5A059]'
-            : 'bg-[#D4AF37]'
+            : ''
         }`}
+        style={
+          isDark
+            ? undefined
+            : {
+                backgroundColor:
+                  'var(--wedding-primary)'
+              }
+        }
       />
 
       <motion.div
@@ -319,9 +364,19 @@ function InvitationStatusScreen({
           }}
           className={`relative z-10 mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-full border text-2xl ${
             isDark
-              ? 'border-[#C5A059]/30 bg-[#C5A059]/10'
-              : 'border-[#9E7A32]/20 bg-[#9E7A32]/10'
+              ? 'border-[#C5A059]/30 bg-[#C5A059]/10 text-[#C5A059]'
+              : ''
           }`}
+          style={
+            isDark
+              ? undefined
+              : {
+                  borderColor:
+                    'var(--wedding-secondary)',
+                  color:
+                    'var(--wedding-primary)'
+                }
+          }
         >
           ✦
         </motion.div>
@@ -339,7 +394,8 @@ function InvitationStatusScreen({
         </p>
 
         {actionLabel &&
-          typeof onAction === 'function' && (
+          typeof onAction ===
+            'function' && (
             <motion.button
               type="button"
               whileHover={{
@@ -350,7 +406,19 @@ function InvitationStatusScreen({
                 scale: 0.98
               }}
               onClick={onAction}
-              className="relative z-10 mt-9 rounded-full bg-gradient-to-r from-[#D4AF37] via-[#FFF3CC] to-[#AA7C11] px-9 py-4 text-[10px] font-black uppercase tracking-[0.28em] text-black shadow-[0_15px_35px_rgba(197,160,89,0.3)]"
+              className={`relative z-10 mt-9 rounded-full px-9 py-4 text-[10px] font-black uppercase tracking-[0.28em] shadow-[0_15px_35px_rgba(0,0,0,0.15)] ${
+                isDark
+                  ? 'bg-gradient-to-r from-[#D4AF37] via-[#FFF3CC] to-[#AA7C11] text-black'
+                  : 'text-white'
+              }`}
+              style={
+                isDark
+                  ? undefined
+                  : {
+                      background:
+                        'linear-gradient(135deg, var(--wedding-primary), var(--wedding-secondary))'
+                    }
+              }
             >
               {actionLabel}
             </motion.button>
@@ -361,18 +429,27 @@ function InvitationStatusScreen({
 }
 
 export function LandingPage() {
-  const { slug = '' } = useParams();
+  const { slug = '' } =
+    useParams();
 
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion =
+    useReducedMotion();
 
-  const openingTimerRef = useRef(null);
-  const openingRef = useRef(false);
+  const openingTimerRef =
+    useRef(null);
+
+  const openingRef =
+    useRef(false);
 
   /*
-   * Mantiene una referencia del control de música
-   * para que PLAY / PAUSA no reinicie el sobre.
+   * Referencia independiente del estado
+   * del sobre.
+   *
+   * Gracias a esto pausar/reanudar música
+   * NO vuelve a mostrar el sobre.
    */
-  const setPlayingRef = useRef(null);
+  const setPlayingRef =
+    useRef(null);
 
   const {
     wedding,
@@ -393,7 +470,9 @@ export function LandingPage() {
       'light',
 
     allowToggle:
-      wedding?.theme?.allowThemeToggle !== false
+      wedding?.theme
+        ?.allowThemeToggle !==
+      false
   });
 
   const galleryEnabled =
@@ -428,7 +507,9 @@ export function LandingPage() {
     sectionEnabled('music');
 
   const guestBookEnabled =
-    sectionEnabled('guestBook');
+    sectionEnabled(
+      'guestBook'
+    );
 
   const calendarEnabled =
     sectionEnabled('calendar') ||
@@ -441,8 +522,10 @@ export function LandingPage() {
   const musicUrl =
     musicEnabled
       ? cleanText(
-          wedding?.media?.musicUrl ||
-            wedding?.media?.backgroundMusic ||
+          wedding?.media
+            ?.musicUrl ||
+            wedding?.media
+              ?.backgroundMusic ||
             wedding?.musicUrl ||
             wedding?.backgroundMusic
         )
@@ -514,51 +597,91 @@ export function LandingPage() {
     envelopeStep === 2;
 
   /*
-   * Usamos únicamente la identidad real de
-   * la invitación.
+   * Identidad estable de la boda.
    *
-   * Pausar/reanudar música NO modifica esto.
+   * Cambiar play/pause NO modifica esto.
    */
   const weddingIdentity =
     wedding?.slug ||
     slug;
 
+  /*
+   * ======================================================
+   * TEMA
+   * ======================================================
+   *
+   * DARK:
+   * SIEMPRE negro + dorado + marfil.
+   *
+   * LIGHT:
+   * SIEMPRE los colores seleccionados por el cliente.
+   *
+   * Esto corrige el comportamiento anterior donde los
+   * colores personalizados podían ganar también en dark.
+   */
   const themeVariables =
-    useMemo(
-      () => ({
+    useMemo(() => {
+      if (isDark) {
+        return {
+          '--wedding-primary':
+            '#C5A059',
+
+          '--wedding-secondary':
+            '#FCF6BA',
+
+          '--wedding-background':
+            '#050505',
+
+          '--wedding-text':
+            '#FDFBF7'
+        };
+      }
+
+      return {
         '--wedding-primary':
-          wedding?.theme?.primaryColor ||
-          (isDark
-            ? '#C5A059'
-            : '#9E7A32'),
+          cleanText(
+            wedding?.theme
+              ?.primaryColor
+          ) ||
+          '#9E7A32',
 
         '--wedding-secondary':
-          wedding?.theme?.secondaryColor ||
-          (isDark
-            ? '#FCF6BA'
-            : '#C5A059'),
+          cleanText(
+            wedding?.theme
+              ?.secondaryColor
+          ) ||
+          '#C5A059',
 
         '--wedding-background':
-          wedding?.theme?.backgroundColor ||
-          (isDark
-            ? '#050505'
-            : '#F9F7F2'),
+          cleanText(
+            wedding?.theme
+              ?.backgroundColor
+          ) ||
+          '#F9F7F2',
 
         '--wedding-text':
-          wedding?.theme?.textColor ||
-          (isDark
-            ? '#FDFBF7'
-            : '#111111')
-      }),
-      [
-        isDark,
-        wedding?.theme?.backgroundColor,
-        wedding?.theme?.primaryColor,
-        wedding?.theme?.secondaryColor,
-        wedding?.theme?.textColor
-      ]
-    );
+          cleanText(
+            wedding?.theme
+              ?.textColor
+          ) ||
+          '#111111'
+      };
+    }, [
+      isDark,
+      wedding?.theme
+        ?.backgroundColor,
+      wedding?.theme
+        ?.primaryColor,
+      wedding?.theme
+        ?.secondaryColor,
+      wedding?.theme
+        ?.textColor
+    ]);
 
+  /*
+   * Limpieza al abandonar
+   * la invitación.
+   */
   useEffect(() => {
     return () => {
       if (
@@ -575,14 +698,13 @@ export function LandingPage() {
   }, []);
 
   /*
-   * =====================================================
-   * SOBRE
-   * =====================================================
+   * ======================================================
+   * REINICIAR SOBRE
+   * ======================================================
    *
-   * Solo vuelve al estado cerrado cuando cambia
-   * realmente de invitación.
+   * SOLAMENTE cuando realmente cambia la boda.
    *
-   * El botón de música NO puede provocar esto.
+   * La música no tiene ninguna relación con este efecto.
    */
   useEffect(() => {
     setEnvelopeStep(0);
@@ -617,8 +739,10 @@ export function LandingPage() {
   }, [weddingIdentity]);
 
   /*
-   * Si ya no hay música, solo se pausa.
-   * Nunca tocamos envelopeStep aquí.
+   * Si la sección musical se desactiva
+   * o no existe canción, solo pausamos.
+   *
+   * NO tocamos el sobre.
    */
   useEffect(() => {
     if (
@@ -636,9 +760,9 @@ export function LandingPage() {
   ]);
 
   /*
-   * =====================================================
-   * UN SOLO TOQUE PARA ABRIR
-   * =====================================================
+   * ======================================================
+   * APERTURA CON UN SOLO TOQUE
+   * ======================================================
    */
   const handleOpenInvitation =
     useCallback(() => {
@@ -652,11 +776,14 @@ export function LandingPage() {
       openingRef.current =
         true;
 
+      /*
+       * Primer y único toque.
+       */
       setEnvelopeStep(1);
 
       /*
-       * La interacción que abre el sobre
-       * también inicia la música.
+       * El mismo gesto intenta reproducir
+       * la música.
        */
       if (
         musicEnabled &&
@@ -674,10 +801,10 @@ export function LandingPage() {
       }
 
       /*
-       * Después de la animación entra
-       * automáticamente.
+       * Al terminar la animación del sobre
+       * entramos automáticamente.
        *
-       * NO necesita segundo toque.
+       * NO hay segundo toque.
        */
       openingTimerRef.current =
         window.setTimeout(
@@ -719,7 +846,9 @@ export function LandingPage() {
         title="Invitación no encontrada"
         message="La dirección utilizada no corresponde a una invitación disponible."
         actionLabel="Intentar nuevamente"
-        onAction={reloadWedding}
+        onAction={
+          reloadWedding
+        }
       />
     );
   }
@@ -731,7 +860,9 @@ export function LandingPage() {
         title="No pudimos cargar la invitación"
         message={error}
         actionLabel="Volver a intentar"
-        onAction={reloadWedding}
+        onAction={
+          reloadWedding
+        }
       />
     );
   }
@@ -743,7 +874,9 @@ export function LandingPage() {
         title="Invitación no disponible"
         message="No se encontró información para mostrar esta invitación."
         actionLabel="Recargar"
-        onAction={reloadWedding}
+        onAction={
+          reloadWedding
+        }
       />
     );
   }
@@ -751,10 +884,10 @@ export function LandingPage() {
   return (
     <div
       style={themeVariables}
-      className={`relative min-h-screen overflow-x-hidden font-serif selection:bg-[#C5A059] selection:text-black ${styles.bg}`}
+      className={`relative min-h-screen overflow-x-hidden font-serif transition-colors duration-700 selection:text-white ${styles.bg}`}
     >
       {/*
-       * Textura general.
+       * Textura global.
        */}
       <div
         aria-hidden="true"
@@ -777,13 +910,24 @@ export function LandingPage() {
 
       {invitationOpened && (
         <>
+          {/*
+           * Barra de progreso.
+           *
+           * DARK → dorada.
+           * LIGHT → usa la paleta del cliente.
+           */}
           <motion.div
             aria-hidden="true"
             style={{
               scaleX:
-                progressScale
+                progressScale,
+
+              background:
+                isDark
+                  ? 'linear-gradient(90deg, #8A6414, #FFF1B8, #AA7C11)'
+                  : 'linear-gradient(90deg, var(--wedding-primary), var(--wedding-secondary), var(--wedding-primary))'
             }}
-            className="fixed left-0 right-0 top-0 z-[110] h-[2px] origin-left bg-gradient-to-r from-[#8A6414] via-[#FFF1B8] to-[#AA7C11] shadow-[0_0_14px_rgba(197,160,89,0.7)]"
+            className="fixed left-0 right-0 top-0 z-[110] h-[2px] origin-left shadow-[0_0_14px_rgba(0,0,0,0.15)]"
           />
 
           <FloatingControls
@@ -812,6 +956,10 @@ export function LandingPage() {
         </>
       )}
 
+      {/*
+       * El sobre conserva el diseño
+       * que ya habíamos dejado.
+       */}
       <WeddingEnvelope
         wedding={wedding}
         step={envelopeStep}
@@ -823,27 +971,65 @@ export function LandingPage() {
 
       {invitationOpened && (
         <motion.main
-          variants={pageEntrance}
+          variants={
+            pageEntrance
+          }
           initial="hidden"
           animate="visible"
-          className={`relative z-10 mx-auto min-h-screen w-full max-w-[760px] overflow-hidden border-x shadow-[0_0_160px_rgba(0,0,0,0.10),0_0_180px_rgba(197,160,89,0.07)] transition-colors duration-1000 ${
+          style={
+            isDark
+              ? undefined
+              : {
+                  backgroundColor:
+                    'var(--wedding-background)',
+
+                  borderColor:
+                    'var(--wedding-secondary)'
+                }
+          }
+          className={`relative z-10 mx-auto min-h-screen w-full max-w-[760px] overflow-hidden border-x shadow-[0_0_160px_rgba(0,0,0,0.10),0_0_180px_rgba(0,0,0,0.05)] transition-colors duration-1000 ${
             isDark
               ? 'border-white/[0.045] bg-[#080808]/95'
-              : 'border-black/[0.045] bg-[#F9F7F2]/95'
+              : ''
           }`}
         >
           {/*
-           * Líneas finas que dan sensación de
-           * papelería/invitación impresa.
+           * Líneas ornamentales.
+           *
+           * En light usan secondary.
            */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-0 left-[22px] top-0 z-30 hidden w-px bg-gradient-to-b from-transparent via-[#C5A059]/10 to-transparent sm:block"
+            className={`pointer-events-none absolute bottom-0 left-[22px] top-0 z-30 hidden w-px sm:block ${
+              isDark
+                ? 'bg-gradient-to-b from-transparent via-[#C5A059]/10 to-transparent'
+                : ''
+            }`}
+            style={
+              isDark
+                ? undefined
+                : {
+                    background:
+                      'linear-gradient(to bottom, transparent, color-mix(in srgb, var(--wedding-secondary) 25%, transparent), transparent)'
+                  }
+            }
           />
 
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-0 right-[22px] top-0 z-30 hidden w-px bg-gradient-to-b from-transparent via-[#C5A059]/10 to-transparent sm:block"
+            className={`pointer-events-none absolute bottom-0 right-[22px] top-0 z-30 hidden w-px sm:block ${
+              isDark
+                ? 'bg-gradient-to-b from-transparent via-[#C5A059]/10 to-transparent'
+                : ''
+            }`}
+            style={
+              isDark
+                ? undefined
+                : {
+                    background:
+                      'linear-gradient(to bottom, transparent, color-mix(in srgb, var(--wedding-secondary) 25%, transparent), transparent)'
+                  }
+            }
           />
 
           {/*
@@ -882,7 +1068,7 @@ export function LandingPage() {
               variant="glow"
             >
               <SectionDivider
-                text="Momentos inolvidables"
+                variant="elegant"
                 isDark={isDark}
               />
 
@@ -902,7 +1088,7 @@ export function LandingPage() {
               variant="soft"
             >
               <SectionDivider
-                text="Con la bendición"
+                variant="elegant"
                 isDark={isDark}
               />
 
@@ -914,7 +1100,7 @@ export function LandingPage() {
           )}
 
           {/*
-           * CALENDARIO / CUENTA REGRESIVA
+           * CALENDARIO
            */}
           {calendarEnabled && (
             <SectionFrame
@@ -933,7 +1119,7 @@ export function LandingPage() {
           )}
 
           {/*
-           * UBICACIÓN + MAPA
+           * UBICACIÓN + GOOGLE MAPS
            */}
           {locationEnabled && (
             <SectionFrame
@@ -941,7 +1127,7 @@ export function LandingPage() {
               variant="glow"
             >
               <SectionDivider
-                text="El lugar de nuestro gran día"
+                variant="elegant"
                 isDark={isDark}
               />
 
@@ -961,7 +1147,7 @@ export function LandingPage() {
               variant="soft"
             >
               <SectionDivider
-                text="Nuestro gran día"
+                variant="elegant"
                 isDark={isDark}
               />
 
@@ -973,14 +1159,14 @@ export function LandingPage() {
           )}
 
           {/*
-           * CÓDIGO DE VESTIMENTA
+           * DRESS CODE
            */}
           {dressCodeEnabled && (
             <SectionFrame
               isDark={isDark}
             >
               <SectionDivider
-                text="Para este día especial"
+                variant="elegant"
                 isDark={isDark}
               />
 
@@ -992,19 +1178,18 @@ export function LandingPage() {
           )}
 
           {/*
-           * =================================================
+           * ================================================
            * REGALOS
-           * =================================================
+           * ================================================
            *
            * SIN SectionDivider.
            *
-           * GiftsSection ya tiene su propio:
+           * GiftsSection ya tiene su propio encabezado.
            *
-           * 🎁
-           * UN DETALLE PARA NOSOTROS
-           * Mesa de regalos
+           * Evitamos:
            *
-           * No repetimos texto.
+           * "UN DETALLE PARA NOSOTROS"
+           * repetido dos veces.
            */}
           {giftsEnabled && (
             <SectionFrame
@@ -1019,19 +1204,20 @@ export function LandingPage() {
           )}
 
           {/*
-           * =================================================
+           * ================================================
            * LIBRO DE FIRMAS
-           * =================================================
+           * ================================================
            *
            * SIN:
            *
            * "DÉJANOS UN RECUERDO"
            *
-           * GuestBookSection ya tiene su propio encabezado,
-           * formulario y carrusel.
+           * GuestBookSection ya incluye:
            *
-           * Así evitamos la repetición y el espacio enorme
-           * que se veía en tu captura.
+           * - Deja tu firma
+           * - formulario
+           * - libro de firmas
+           * - carrusel
            */}
           {guestBookEnabled && (
             <SectionFrame
