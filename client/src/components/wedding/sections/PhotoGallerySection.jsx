@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
+import { createPortal } from 'react-dom';
 
 function cleanText(value) {
   if (typeof value !== 'string') {
@@ -10,7 +16,8 @@ function cleanText(value) {
 
 function getServerOrigin() {
   const apiUrl = cleanText(
-    import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+    import.meta.env.VITE_API_URL ||
+      'http://localhost:5000/api'
   );
 
   try {
@@ -27,7 +34,10 @@ function resolveImageUrl(value) {
     return '';
   }
 
-  if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
+  if (
+    imageUrl.startsWith('data:') ||
+    imageUrl.startsWith('blob:')
+  ) {
     return imageUrl;
   }
 
@@ -95,7 +105,10 @@ function normalizePhotos(photos = []) {
       }
 
       return {
-        id: photo.id || photo._id || `gallery-photo-${index + 1}`,
+        id:
+          photo.id ||
+          photo._id ||
+          `gallery-photo-${index + 1}`,
 
         url,
 
@@ -117,7 +130,9 @@ function MobileGalleryCard({
   onOpen,
   onImageError
 }) {
-  const alt = photo.alt || `Fotografía ${index + 1}`;
+  const alt =
+    photo.alt ||
+    `Fotografía ${index + 1}`;
 
   return (
     <button
@@ -137,14 +152,19 @@ function MobileGalleryCard({
           loading="lazy"
           decoding="async"
           draggable="false"
-          onError={() => onImageError(photo.id)}
+          onError={() =>
+            onImageError(photo.id)
+          }
           className="h-full w-full select-none object-cover"
         />
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         <span className="pointer-events-none absolute bottom-4 left-4 text-[9px] font-bold uppercase tracking-[0.2em] text-white/90">
-          {String(index + 1).padStart(2, '0')}
+          {String(index + 1).padStart(
+            2,
+            '0'
+          )}
         </span>
       </div>
     </button>
@@ -159,7 +179,9 @@ function DesktopGalleryCard({
   onImageError,
   featured = false
 }) {
-  const alt = photo.alt || `Fotografía ${index + 1}`;
+  const alt =
+    photo.alt ||
+    `Fotografía ${index + 1}`;
 
   return (
     <button
@@ -171,7 +193,9 @@ function DesktopGalleryCard({
           ? 'border-white/10 bg-[#111] shadow-[0_20px_60px_rgba(0,0,0,0.35)]'
           : 'border-black/[0.08] bg-white shadow-[0_18px_50px_rgba(51,42,27,0.13)]'
       } hover:-translate-y-1 ${
-        featured ? 'min-h-[610px]' : 'min-h-[292px]'
+        featured
+          ? 'min-h-[610px]'
+          : 'min-h-[292px]'
       }`}
     >
       <img
@@ -180,7 +204,9 @@ function DesktopGalleryCard({
         loading="lazy"
         decoding="async"
         draggable="false"
-        onError={() => onImageError(photo.id)}
+        onError={() =>
+          onImageError(photo.id)
+        }
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.035]"
       />
 
@@ -193,7 +219,10 @@ function DesktopGalleryCard({
           </p>
 
           <p className="mt-1 font-serif text-xl text-white">
-            {String(index + 1).padStart(2, '0')}
+            {String(index + 1).padStart(
+              2,
+              '0'
+            )}
           </p>
         </div>
 
@@ -229,28 +258,36 @@ function DesktopGallery({
   if (photos.length === 2) {
     return (
       <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-5 px-8">
-        {photos.map((photo, index) => (
-          <div
-            key={photo.id}
-            className="min-h-[560px]"
-          >
-            <DesktopGalleryCard
-              photo={photo}
-              index={index}
-              isDark={isDark}
-              onOpen={onOpen}
-              onImageError={onImageError}
-              featured
-            />
-          </div>
-        ))}
+        {photos.map(
+          (photo, index) => (
+            <div
+              key={photo.id}
+              className="min-h-[560px]"
+            >
+              <DesktopGalleryCard
+                photo={photo}
+                index={index}
+                isDark={isDark}
+                onOpen={onOpen}
+                onImageError={
+                  onImageError
+                }
+                featured
+              />
+            </div>
+          )
+        )}
       </div>
     );
   }
 
   const firstPhoto = photos[0];
-  const sidePhotos = photos.slice(1, 3);
-  const remainingPhotos = photos.slice(3);
+
+  const sidePhotos =
+    photos.slice(1, 3);
+
+  const remainingPhotos =
+    photos.slice(3);
 
   return (
     <div className="mx-auto max-w-[1120px] px-8">
@@ -267,40 +304,73 @@ function DesktopGallery({
         </div>
 
         <div className="grid grid-rows-2 gap-5">
-          {sidePhotos.map((photo, sideIndex) => (
-            <DesktopGalleryCard
-              key={photo.id}
-              photo={photo}
-              index={sideIndex + 1}
-              isDark={isDark}
-              onOpen={onOpen}
-              onImageError={onImageError}
-            />
-          ))}
+          {sidePhotos.map(
+            (
+              photo,
+              sideIndex
+            ) => (
+              <DesktopGalleryCard
+                key={photo.id}
+                photo={photo}
+                index={
+                  sideIndex + 1
+                }
+                isDark={isDark}
+                onOpen={onOpen}
+                onImageError={
+                  onImageError
+                }
+              />
+            )
+          )}
         </div>
       </div>
 
-      {remainingPhotos.length > 0 && (
+      {remainingPhotos.length >
+        0 && (
         <div className="mt-5 grid grid-cols-2 gap-5 lg:grid-cols-3">
-          {remainingPhotos.map((photo, index) => (
-            <div
-              key={photo.id}
-              className="min-h-[330px]"
-            >
-              <DesktopGalleryCard
-                photo={photo}
-                index={index + 3}
-                isDark={isDark}
-                onOpen={onOpen}
-                onImageError={onImageError}
-              />
-            </div>
-          ))}
+          {remainingPhotos.map(
+            (
+              photo,
+              index
+            ) => (
+              <div
+                key={photo.id}
+                className="min-h-[330px]"
+              >
+                <DesktopGalleryCard
+                  photo={photo}
+                  index={
+                    index + 3
+                  }
+                  isDark={isDark}
+                  onOpen={
+                    onOpen
+                  }
+                  onImageError={
+                    onImageError
+                  }
+                />
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
   );
 }
+
+/*
+ * =========================================================
+ * VISOR DE FOTOGRAFÍAS
+ * =========================================================
+ *
+ * Se renderiza mediante createPortal directamente
+ * en document.body.
+ *
+ * De esta forma no depende del stacking context,
+ * transformaciones o z-index de la invitación.
+ */
 
 function GalleryModal({
   photo,
@@ -311,71 +381,128 @@ function GalleryModal({
   onNext,
   onImageError
 }) {
-  const touchStartX = useRef(null);
-  const touchStartY = useRef(null);
+  const touchStartX =
+    useRef(null);
+
+  const touchStartY =
+    useRef(null);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
+    const previousBodyOverflow =
+      document.body.style.overflow;
 
-    document.body.style.overflow = 'hidden';
+    const previousHtmlOverflow =
+      document.documentElement.style
+        .overflow;
+
+    const previousOverscroll =
+      document.body.style
+        .overscrollBehavior;
+
+    document.body.style.overflow =
+      'hidden';
+
+    document.documentElement.style.overflow =
+      'hidden';
+
+    document.body.style.overscrollBehavior =
+      'none';
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
         onClose();
       }
 
-      if (event.key === 'ArrowLeft') {
+      if (
+        event.key ===
+        'ArrowLeft'
+      ) {
         onPrevious();
       }
 
-      if (event.key === 'ArrowRight') {
+      if (
+        event.key ===
+        'ArrowRight'
+      ) {
         onNext();
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener(
+      'keydown',
+      handleKeyDown
+    );
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow =
+        previousBodyOverflow;
 
-      document.removeEventListener('keydown', handleKeyDown);
+      document.documentElement.style.overflow =
+        previousHtmlOverflow;
+
+      document.body.style.overscrollBehavior =
+        previousOverscroll;
+
+      document.removeEventListener(
+        'keydown',
+        handleKeyDown
+      );
     };
-  }, [onClose, onNext, onPrevious]);
+  }, [
+    onClose,
+    onNext,
+    onPrevious
+  ]);
 
-  function handleTouchStart(event) {
-    const touch = event.touches?.[0];
+  function handleTouchStart(
+    event
+  ) {
+    const touch =
+      event.touches?.[0];
 
     if (!touch) {
       return;
     }
 
-    touchStartX.current = touch.clientX;
-    touchStartY.current = touch.clientY;
+    touchStartX.current =
+      touch.clientX;
+
+    touchStartY.current =
+      touch.clientY;
   }
 
-  function handleTouchEnd(event) {
-    const touch = event.changedTouches?.[0];
+  function handleTouchEnd(
+    event
+  ) {
+    const touch =
+      event.changedTouches?.[0];
 
     if (
       !touch ||
-      touchStartX.current === null ||
-      touchStartY.current === null
+      touchStartX.current ===
+        null ||
+      touchStartY.current ===
+        null
     ) {
       return;
     }
 
     const distanceX =
-      touch.clientX - touchStartX.current;
+      touch.clientX -
+      touchStartX.current;
 
     const distanceY =
-      touch.clientY - touchStartY.current;
+      touch.clientY -
+      touchStartY.current;
 
     touchStartX.current = null;
     touchStartY.current = null;
 
     if (
-      Math.abs(distanceX) < 45 ||
-      Math.abs(distanceX) <= Math.abs(distanceY)
+      Math.abs(distanceX) <
+        45 ||
+      Math.abs(distanceX) <=
+        Math.abs(distanceY)
     ) {
       return;
     }
@@ -388,122 +515,124 @@ function GalleryModal({
     onNext();
   }
 
-  function handlePhotoAreaClick(event) {
+  function handlePhotoAreaClick(
+    event
+  ) {
     event.stopPropagation();
   }
 
   const alt =
-    photo.alt || `Fotografía ${photoIndex + 1}`;
+    photo.alt ||
+    `Fotografía ${
+      photoIndex + 1
+    }`;
 
-  return (
+  if (
+    typeof document ===
+    'undefined'
+  ) {
+    return null;
+  }
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`Fotografía ampliada: ${alt}`}
       onClick={onClose}
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 p-3 backdrop-blur-sm md:p-10"
+      className="fixed inset-0 z-[99999] flex h-[100dvh] w-screen items-center justify-center overflow-hidden bg-[#050505]"
     >
       {/*
        * =====================================================
-       * CONTENEDOR GENERAL
+       * FOTO
        * =====================================================
        *
-       * NO tiene stopPropagation.
-       *
-       * De esta forma cualquier toque/clic en el fondo
-       * negro llega hasta el overlay y ejecuta onClose().
+       * Solamente esta zona detiene el click.
+       * Todo el resto del fondo negro cierra el visor.
        */}
 
-      <div className="relative flex h-full max-h-[94vh] w-full max-w-[1250px] select-none items-center justify-center">
-        {/*
-         * =====================================================
-         * CONTROLES SOLO PARA PC
-         * =====================================================
-         */}
+      <div
+        onClick={
+          handlePhotoAreaClick
+        }
+        onTouchStart={
+          handleTouchStart
+        }
+        onTouchEnd={
+          handleTouchEnd
+        }
+        className="relative flex max-h-[92dvh] max-w-[96vw] select-none items-center justify-center md:max-h-[84vh] md:max-w-[82vw]"
+      >
+        <img
+          src={photo.url}
+          alt={alt}
+          draggable="false"
+          decoding="async"
+          onError={() => {
+            onImageError(
+              photo.id
+            );
 
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
             onClose();
           }}
-          aria-label="Cerrar fotografía"
-          className="absolute right-0 top-0 z-30 hidden h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/50 text-lg text-white backdrop-blur-md transition-all hover:rotate-90 hover:bg-white hover:text-black md:flex"
-        >
-          ✕
-        </button>
+          className="block max-h-[90dvh] max-w-[94vw] select-none object-contain shadow-[0_30px_100px_rgba(0,0,0,0.75)] md:max-h-[82vh] md:max-w-[82vw] md:rounded-[1.25rem]"
+        />
 
         {totalPhotos > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onPrevious();
-              }}
-              aria-label="Fotografía anterior"
-              className="absolute left-0 top-1/2 z-30 hidden h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-3xl font-light text-white backdrop-blur-md transition-all hover:scale-105 hover:bg-white hover:text-black md:flex"
-            >
-              ‹
-            </button>
-
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onNext();
-              }}
-              aria-label="Fotografía siguiente"
-              className="absolute right-0 top-1/2 z-30 hidden h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/50 text-3xl font-light text-white backdrop-blur-md transition-all hover:scale-105 hover:bg-white hover:text-black md:flex"
-            >
-              ›
-            </button>
-          </>
+          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/70 px-4 py-2 text-[9px] font-bold tracking-[0.18em] text-white/90 backdrop-blur-md">
+            {photoIndex + 1} /{' '}
+            {totalPhotos}
+          </div>
         )}
-
-        {/*
-         * =====================================================
-         * ÁREA REAL DE LA FOTOGRAFÍA
-         * =====================================================
-         *
-         * SOLO esta zona detiene el clic.
-         *
-         * Tocar foto:
-         * no cierra.
-         *
-         * Deslizar foto:
-         * cambia de fotografía.
-         *
-         * Tocar cualquier fondo negro:
-         * cierra.
-         */}
-
-        <div
-          onClick={handlePhotoAreaClick}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className="relative flex max-h-[92vh] max-w-full items-center justify-center md:max-w-[calc(100%-170px)]"
-        >
-          <img
-            src={photo.url}
-            alt={alt}
-            draggable="false"
-            decoding="async"
-            onError={() => {
-              onImageError(photo.id);
-              onClose();
-            }}
-            className="block max-h-[90vh] max-w-[94vw] select-none rounded-[1.2rem] object-contain shadow-[0_30px_100px_rgba(0,0,0,0.6)] md:max-w-[calc(100vw-220px)] md:rounded-[1.6rem]"
-          />
-
-          {totalPhotos > 1 && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-4 py-2 text-[9px] font-bold tracking-[0.18em] text-white/90 backdrop-blur-md">
-              {photoIndex + 1} / {totalPhotos}
-            </div>
-          )}
-        </div>
       </div>
-    </div>
+
+      {/*
+       * =====================================================
+       * CONTROLES DESKTOP
+       * =====================================================
+       */}
+
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onClose();
+        }}
+        aria-label="Cerrar fotografía"
+        className="absolute right-6 top-6 z-30 hidden h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/60 text-lg text-white backdrop-blur-md transition-all duration-300 hover:rotate-90 hover:border-white/30 hover:bg-white hover:text-black md:flex"
+      >
+        ✕
+      </button>
+
+      {totalPhotos > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onPrevious();
+            }}
+            aria-label="Fotografía anterior"
+            className="absolute left-6 top-1/2 z-30 hidden h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/60 text-3xl font-light text-white backdrop-blur-md transition-all duration-300 hover:scale-105 hover:border-white/30 hover:bg-white hover:text-black md:flex lg:left-10"
+          >
+            ‹
+          </button>
+
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onNext();
+            }}
+            aria-label="Fotografía siguiente"
+            className="absolute right-6 top-1/2 z-30 hidden h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/60 text-3xl font-light text-white backdrop-blur-md transition-all duration-300 hover:scale-105 hover:border-white/30 hover:bg-white hover:text-black md:flex lg:right-10"
+          >
+            ›
+          </button>
+        </>
+      )}
+    </div>,
+    document.body
   );
 }
 
@@ -515,59 +644,94 @@ export function PhotoGallerySection({
   subtitle = 'Desliza para descubrir',
   className = ''
 }) {
-  const [selectedPhotoId, setSelectedPhotoId] = useState(null);
+  const [
+    selectedPhotoId,
+    setSelectedPhotoId
+  ] = useState(null);
 
-  const [failedPhotoIds, setFailedPhotoIds] = useState(
+  const [
+    failedPhotoIds,
+    setFailedPhotoIds
+  ] = useState(
     () => new Set()
   );
 
-  const galleryPhotos = useMemo(() => {
-    const source =
-      photos ||
-      wedding.media?.gallery ||
-      wedding.gallery ||
-      wedding.photos ||
-      [];
+  const galleryPhotos =
+    useMemo(() => {
+      const source =
+        photos ||
+        wedding.media?.gallery ||
+        wedding.gallery ||
+        wedding.photos ||
+        [];
 
-    return normalizePhotos(source);
-  }, [photos, wedding]);
+      return normalizePhotos(
+        source
+      );
+    }, [photos, wedding]);
 
   useEffect(() => {
-    setFailedPhotoIds(new Set());
-    setSelectedPhotoId(null);
+    setFailedPhotoIds(
+      new Set()
+    );
+
+    setSelectedPhotoId(
+      null
+    );
   }, [galleryPhotos]);
 
-  const visiblePhotos = useMemo(() => {
-    return galleryPhotos.filter(
-      (photo) => !failedPhotoIds.has(photo.id)
-    );
-  }, [failedPhotoIds, galleryPhotos]);
+  const visiblePhotos =
+    useMemo(() => {
+      return galleryPhotos.filter(
+        (photo) =>
+          !failedPhotoIds.has(
+            photo.id
+          )
+      );
+    }, [
+      failedPhotoIds,
+      galleryPhotos
+    ]);
 
-  const selectedPhotoIndex = useMemo(() => {
-    if (!selectedPhotoId) {
-      return -1;
-    }
+  const selectedPhotoIndex =
+    useMemo(() => {
+      if (!selectedPhotoId) {
+        return -1;
+      }
 
-    return visiblePhotos.findIndex(
-      (photo) => photo.id === selectedPhotoId
-    );
-  }, [selectedPhotoId, visiblePhotos]);
+      return visiblePhotos.findIndex(
+        (photo) =>
+          photo.id ===
+          selectedPhotoId
+      );
+    }, [
+      selectedPhotoId,
+      visiblePhotos
+    ]);
 
   const selectedPhoto =
     selectedPhotoIndex >= 0
-      ? visiblePhotos[selectedPhotoIndex]
+      ? visiblePhotos[
+          selectedPhotoIndex
+        ]
       : null;
 
   function openPhoto(photo) {
-    setSelectedPhotoId(photo.id);
+    setSelectedPhotoId(
+      photo.id
+    );
   }
 
   function closePhoto() {
-    setSelectedPhotoId(null);
+    setSelectedPhotoId(
+      null
+    );
   }
 
   function showPreviousPhoto() {
-    if (visiblePhotos.length <= 1) {
+    if (
+      visiblePhotos.length <= 1
+    ) {
       return;
     }
 
@@ -578,16 +742,21 @@ export function PhotoGallerySection({
 
     const previousIndex =
       currentIndex === 0
-        ? visiblePhotos.length - 1
+        ? visiblePhotos.length -
+          1
         : currentIndex - 1;
 
     setSelectedPhotoId(
-      visiblePhotos[previousIndex].id
+      visiblePhotos[
+        previousIndex
+      ].id
     );
   }
 
   function showNextPhoto() {
-    if (visiblePhotos.length <= 1) {
+    if (
+      visiblePhotos.length <= 1
+    ) {
       return;
     }
 
@@ -597,32 +766,48 @@ export function PhotoGallerySection({
         : 0;
 
     const nextIndex =
-      currentIndex === visiblePhotos.length - 1
+      currentIndex ===
+      visiblePhotos.length - 1
         ? 0
         : currentIndex + 1;
 
     setSelectedPhotoId(
-      visiblePhotos[nextIndex].id
+      visiblePhotos[
+        nextIndex
+      ].id
     );
   }
 
-  function handleImageError(photoId) {
-    setFailedPhotoIds((currentIds) => {
-      const nextIds = new Set(currentIds);
+  function handleImageError(
+    photoId
+  ) {
+    setFailedPhotoIds(
+      (currentIds) => {
+        const nextIds =
+          new Set(
+            currentIds
+          );
 
-      nextIds.add(photoId);
+        nextIds.add(
+          photoId
+        );
 
-      return nextIds;
-    });
+        return nextIds;
+      }
+    );
 
-    setSelectedPhotoId((currentPhotoId) =>
-      currentPhotoId === photoId
-        ? null
-        : currentPhotoId
+    setSelectedPhotoId(
+      (currentPhotoId) =>
+        currentPhotoId ===
+        photoId
+          ? null
+          : currentPhotoId
     );
   }
 
-  if (galleryPhotos.length === 0) {
+  if (
+    galleryPhotos.length === 0
+  ) {
     return null;
   }
 
@@ -690,42 +875,45 @@ export function PhotoGallerySection({
        * =====================================================
        * CELULAR
        * =====================================================
-       *
-       * Scroll horizontal nativo.
-       * Sin flechas.
-       * Sin X.
-       * Sin Framer Motion.
        */}
 
       <div
         className="flex w-full snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 md:hidden"
         style={{
-          WebkitOverflowScrolling: 'touch',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          overscrollBehaviorX: 'contain'
+          WebkitOverflowScrolling:
+            'touch',
+          scrollbarWidth:
+            'none',
+          msOverflowStyle:
+            'none',
+          overscrollBehaviorX:
+            'contain'
         }}
       >
-        {visiblePhotos.map((photo, index) => (
-          <MobileGalleryCard
-            key={photo.id}
-            photo={photo}
-            index={index}
-            isDark={isDark}
-            onOpen={openPhoto}
-            onImageError={handleImageError}
-          />
-        ))}
+        {visiblePhotos.map(
+          (photo, index) => (
+            <MobileGalleryCard
+              key={photo.id}
+              photo={photo}
+              index={index}
+              isDark={isDark}
+              onOpen={
+                openPhoto
+              }
+              onImageError={
+                handleImageError
+              }
+            />
+          )
+        )}
 
         <div className="w-1 flex-none" />
       </div>
 
       {/*
        * =====================================================
-       * PC
+       * DESKTOP
        * =====================================================
-       *
-       * Composición editorial.
        */}
 
       <div className="hidden md:block">
@@ -733,19 +921,33 @@ export function PhotoGallerySection({
           photos={visiblePhotos}
           isDark={isDark}
           onOpen={openPhoto}
-          onImageError={handleImageError}
+          onImageError={
+            handleImageError
+          }
         />
       </div>
 
       {selectedPhoto && (
         <GalleryModal
           photo={selectedPhoto}
-          photoIndex={selectedPhotoIndex}
-          totalPhotos={visiblePhotos.length}
-          onClose={closePhoto}
-          onPrevious={showPreviousPhoto}
-          onNext={showNextPhoto}
-          onImageError={handleImageError}
+          photoIndex={
+            selectedPhotoIndex
+          }
+          totalPhotos={
+            visiblePhotos.length
+          }
+          onClose={
+            closePhoto
+          }
+          onPrevious={
+            showPreviousPhoto
+          }
+          onNext={
+            showNextPhoto
+          }
+          onImageError={
+            handleImageError
+          }
         />
       )}
     </section>
