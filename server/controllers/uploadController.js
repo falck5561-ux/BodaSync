@@ -1,5 +1,3 @@
-const fs = require('fs/promises');
-
 const {
   v2: cloudinary
 } = require('cloudinary');
@@ -9,10 +7,19 @@ const {
  * CLOUDINARY
  * =========================================================
  *
- * Las credenciales se leen únicamente desde variables
- * de entorno del servidor.
+ * IMPORTANTE:
  *
- * Nunca deben enviarse al frontend.
+ * CLOUDINARY_API_SECRET nunca sale del servidor.
+ *
+ * El frontend únicamente recibirá:
+ *
+ * - cloudName
+ * - apiKey
+ * - timestamp
+ * - signature
+ * - assetFolder
+ * - resourceType
+ * - uploadUrl
  */
 
 cloudinary.config({
@@ -30,7 +37,7 @@ cloudinary.config({
 
 /*
  * =========================================================
- * CONFIGURACIÓN
+ * CARPETAS
  * =========================================================
  */
 
@@ -42,35 +49,45 @@ const CLOUDINARY_AUDIO_FOLDER =
 
 /*
  * =========================================================
- * VALIDAR CLOUDINARY
+ * HELPERS
  * =========================================================
  */
 
+function cleanText(value) {
+  return String(value || '').trim();
+}
+
 function validateCloudinaryConfig() {
+  const cloudName =
+    cleanText(
+      process.env.CLOUDINARY_CLOUD_NAME
+    );
+
+  const apiKey =
+    cleanText(
+      process.env.CLOUDINARY_API_KEY
+    );
+
+  const apiSecret =
+    cleanText(
+      process.env.CLOUDINARY_API_SECRET
+    );
+
   const missingVariables = [];
 
-  if (
-    !process.env
-      .CLOUDINARY_CLOUD_NAME
-  ) {
+  if (!cloudName) {
     missingVariables.push(
       'CLOUDINARY_CLOUD_NAME'
     );
   }
 
-  if (
-    !process.env
-      .CLOUDINARY_API_KEY
-  ) {
+  if (!apiKey) {
     missingVariables.push(
       'CLOUDINARY_API_KEY'
     );
   }
 
-  if (
-    !process.env
-      .CLOUDINARY_API_SECRET
-  ) {
+  if (!apiSecret) {
     missingVariables.push(
       'CLOUDINARY_API_SECRET'
     );
@@ -83,88 +100,218 @@ function validateCloudinaryConfig() {
       )}`
     );
   }
+
+  return {
+    cloudName,
+    apiKey,
+    apiSecret
+  };
 }
 
-/*
- * =========================================================
- * OBTENER PRIMER ARCHIVO
- * =========================================================
- */
-
-function getFirstFile(
-  files,
-  fieldName
+function normalizeResourceType(
+  resourceType
 ) {
-  const fieldFiles =
-    files?.[fieldName];
+  const normalizedType =
+    cleanText(
+      resourceType
+    ).toLowerCase();
+
+  /*
+   * Solo permitimos los tipos que utiliza
+   * actualmente BodaSync.
+   */
 
   if (
-    !Array.isArray(fieldFiles) ||
-    fieldFiles.length === 0
+    normalizedType === 'image'
   ) {
-    return null;
+    return 'image';
   }
 
-  return fieldFiles[0];
+  if (
+    normalizedType === 'video' ||
+    normalizedType === 'audio'
+  ) {
+    /*
+     * Cloudinary maneja archivos de audio
+     * mediante resource_type "video".
+     */
+    return 'video';
+  }
+
+  return '';
+}
+
+function getAssetFolder(
+  resourceType
+) {
+  if (
+    resourceType === 'video'
+  ) {
+    return CLOUDINARY_AUDIO_FOLDER;
+  }
+
+  return CLOUDINARY_IMAGE_FOLDER;
+}
+
+function getUploadUrl(
+  cloudName,
+  resourceType
+) {
+  return (
+    `https://api.cloudinary.com/v1_1/` +
+    `${encodeURIComponent(cloudName)}/` +
+    `${resourceType}/upload`
+  );
 }
 
 /*
  * =========================================================
- * BORRAR ARCHIVO TEMPORAL LOCAL
+ * CREAR FIRMA PARA SUBIDA DIRECTA
  * =========================================================
  *
- * Actualmente tu middleware puede estar utilizando
- * multer.diskStorage().
+ * POST /api/uploads/signature
  *
- * Mientras terminamos la migración, permitimos que multer
- * guarde temporalmente el archivo y lo eliminamos después
- * de subirlo a Cloudinary.
+ * Esta petición NO recibe archivos.
  *
- * Cuando revisemos middleware/upload.js podremos decidir
- * si lo cambiamos directamente a memoria.
+ * El flujo será:
+ *
+ * React
+ *   ↓
+ * POST /api/uploads/signature
+ *   ↓
+ * Backend verifica administrador
+ *   ↓
+ * Backend genera firma
+ *   ↓
+ * React recibe firma
+ *   ↓
+ * React ───────→ Cloudinary
+ *               archivo pesado
+ *
+ * De esta manera el archivo ya no pasa
+ * por Vercel.
  */
 
-async function removeTemporaryFile(
-  file
-) {
-  if (!file?.path) {
-    return;
-  }
+exports.createUploadSignature =
+  async (req, res) => {
+    try {
+      const {
+        cloudName,
+        apiKey,
+        apiSecret
+      } = validateCloudinaryConfig();
 
-  try {
-    await fs.unlink(
-      file.path
-    );
-  } catch (error) {
-    /*
-     * ENOENT significa que el archivo ya no existe.
-     * En ese caso no necesitamos hacer nada.
-     */
+      const resourceType =
+        normalizeResourceType(
+          req.body?.resourceType
+        );
 
-    if (
-      error?.code !== 'ENOENT'
-    ) {
-      console.warn(
-        'No fue posible eliminar el archivo temporal:',
-        file.path,
-        error?.message
+      if (!resourceType) {
+        return res
+          .status(400)
+          .json({
+            message:
+              'El tipo de archivo no es válido.'
+          });
+      }
+
+      /*
+       * Timestamp Unix en segundos.
+       */
+
+      const timestamp =
+        Math.floor(
+          Date.now() / 1000
+        );
+
+      /*
+       * BodaSync utiliza carpetas dinámicas
+       * de Cloudinary.
+       */
+
+      const assetFolder =
+        getAssetFolder(
+          resourceType
+        );
+
+      /*
+       * Todos los parámetros que firmemos aquí
+       * deben enviarse con exactamente los mismos
+       * valores cuando React haga POST directamente
+       * a Cloudinary.
+       */
+
+      const paramsToSign = {
+        asset_folder:
+          assetFolder,
+
+        timestamp
+      };
+
+      const signature =
+        cloudinary.utils
+          .api_sign_request(
+            paramsToSign,
+            apiSecret
+          );
+
+      const uploadUrl =
+        getUploadUrl(
+          cloudName,
+          resourceType
+        );
+
+      return res
+        .status(200)
+        .json({
+          cloudName,
+
+          apiKey,
+
+          timestamp,
+
+          signature,
+
+          assetFolder,
+
+          resourceType,
+
+          uploadUrl
+        });
+    } catch (error) {
+      console.error(
+        'Error generando firma de Cloudinary:',
+        error
       );
+
+      return res
+        .status(500)
+        .json({
+          message:
+            process.env.NODE_ENV ===
+            'development'
+              ? error?.message ||
+                'No fue posible preparar la subida.'
+              : 'No fue posible preparar la subida.'
+        });
     }
-  }
-}
+  };
 
 /*
  * =========================================================
- * SUBIR BUFFER
+ * SUBIDA LEGACY
  * =========================================================
  *
- * Esto permitirá que el mismo controller funcione también
- * cuando cambiemos multer a memoryStorage().
+ * Conservamos temporalmente POST /api/uploads para que
+ * el proyecto no se rompa mientras cambiamos el frontend.
+ *
+ * Cuando weddingService.js utilice definitivamente
+ * la subida directa, esta ruta ya no será necesaria.
  */
 
 function uploadBufferToCloudinary(
   buffer,
-  options
+  options = {}
 ) {
   return new Promise(
     (resolve, reject) => {
@@ -193,13 +340,24 @@ function uploadBufferToCloudinary(
   );
 }
 
-/*
- * =========================================================
- * SUBIR ARCHIVO A CLOUDINARY
- * =========================================================
- */
+function getFirstFile(
+  files,
+  fieldName
+) {
+  const fieldFiles =
+    files?.[fieldName];
 
-async function uploadFileToCloudinary(
+  if (
+    !Array.isArray(fieldFiles) ||
+    fieldFiles.length === 0
+  ) {
+    return null;
+  }
+
+  return fieldFiles[0];
+}
+
+async function uploadLegacyFile(
   file,
   {
     resourceType = 'image',
@@ -208,305 +366,65 @@ async function uploadFileToCloudinary(
   } = {}
 ) {
   if (!file) {
-    return null;
+    return '';
   }
-
-  const options = {
-    folder,
-
-    resource_type:
-      resourceType,
-
-    use_filename: true,
-
-    unique_filename: true,
-
-    overwrite: false
-  };
-
-  try {
-    let result;
-
-    /*
-     * Caso futuro:
-     * multer.memoryStorage()
-     */
-
-    if (
-      Buffer.isBuffer(
-        file.buffer
-      )
-    ) {
-      result =
-        await uploadBufferToCloudinary(
-          file.buffer,
-          options
-        );
-    } else if (file.path) {
-      /*
-       * Caso actual:
-       * multer.diskStorage()
-       */
-
-      result =
-        await cloudinary
-          .uploader
-          .upload(
-            file.path,
-            options
-          );
-    } else {
-      throw new Error(
-        `No fue posible acceder al archivo ${
-          file.originalname ||
-          file.filename ||
-          ''
-        }.`
-      );
-    }
-
-    if (
-      !result?.secure_url ||
-      !result?.public_id
-    ) {
-      throw new Error(
-        'Cloudinary no devolvió una URL válida.'
-      );
-    }
-
-    return {
-      url:
-        result.secure_url,
-
-      publicId:
-        result.public_id,
-
-      resourceType:
-        result.resource_type ||
-        resourceType
-    };
-  } finally {
-    /*
-     * Si multer creó un archivo local temporal,
-     * siempre intentamos borrarlo.
-     */
-
-    await removeTemporaryFile(
-      file
-    );
-  }
-}
-
-/*
- * =========================================================
- * ELIMINAR ASSET DE CLOUDINARY
- * =========================================================
- *
- * Se utiliza si una subida múltiple falla parcialmente.
- *
- * Ejemplo:
- *
- * portada OK
- * pareja OK
- * galería 1 OK
- * galería 2 ERROR
- *
- * En ese caso retiramos los assets que acabábamos de subir
- * para no dejar archivos huérfanos.
- */
-
-async function destroyCloudinaryAsset(
-  asset
-) {
-  if (!asset?.publicId) {
-    return;
-  }
-
-  try {
-    await cloudinary
-      .uploader
-      .destroy(
-        asset.publicId,
-        {
-          resource_type:
-            asset.resourceType ||
-            'image',
-
-          invalidate: true
-        }
-      );
-  } catch (error) {
-    console.error(
-      'No fue posible revertir un archivo de Cloudinary:',
-      asset.publicId,
-      error?.message
-    );
-  }
-}
-
-/*
- * =========================================================
- * SUBIDA SEGURA DE TODOS LOS ARCHIVOS
- * =========================================================
- */
-
-async function uploadWeddingFiles({
-  coverImageFile,
-  coupleImageFile,
-  backgroundMusicFile,
-  galleryFiles
-}) {
-  const uploadTasks = [];
-
-  if (coverImageFile) {
-    uploadTasks.push({
-      type: 'coverImage',
-
-      file:
-        coverImageFile,
-
-      resourceType:
-        'image',
-
-      folder:
-        CLOUDINARY_IMAGE_FOLDER
-    });
-  }
-
-  if (coupleImageFile) {
-    uploadTasks.push({
-      type: 'coupleImage',
-
-      file:
-        coupleImageFile,
-
-      resourceType:
-        'image',
-
-      folder:
-        CLOUDINARY_IMAGE_FOLDER
-    });
-  }
-
-  if (backgroundMusicFile) {
-    uploadTasks.push({
-      type:
-        'backgroundMusic',
-
-      file:
-        backgroundMusicFile,
-
-      /*
-       * Cloudinary utiliza resource_type "video"
-       * también para audio.
-       */
-
-      resourceType:
-        'video',
-
-      folder:
-        CLOUDINARY_AUDIO_FOLDER
-    });
-  }
-
-  galleryFiles.forEach(
-    (file, index) => {
-      uploadTasks.push({
-        type: 'gallery',
-
-        index,
-
-        file,
-
-        resourceType:
-          'image',
-
-        folder:
-          CLOUDINARY_IMAGE_FOLDER
-      });
-    }
-  );
 
   /*
-   * Subimos en paralelo para que una galería completa
-   * no tenga que esperar imagen por imagen.
+   * Tu middleware actual utiliza memoryStorage,
+   * por lo que esperamos file.buffer.
    */
 
-  const settledResults =
-    await Promise.allSettled(
-      uploadTasks.map(
-        async (task) => {
-          const uploadedAsset =
-            await uploadFileToCloudinary(
-              task.file,
-              {
-                resourceType:
-                  task.resourceType,
-
-                folder:
-                  task.folder
-              }
-            );
-
-          return {
-            ...task,
-
-            uploadedAsset
-          };
-        }
-      )
+  if (
+    !Buffer.isBuffer(
+      file.buffer
+    )
+  ) {
+    throw new Error(
+      `No fue posible leer el archivo ${
+        file.originalname || ''
+      }.`
     );
+  }
 
-  const successfulUploads = [];
-  const failedUploads = [];
+  const result =
+    await uploadBufferToCloudinary(
+      file.buffer,
+      {
+        resource_type:
+          resourceType,
 
-  settledResults.forEach(
-    (result) => {
-      if (
-        result.status ===
-        'fulfilled'
-      ) {
-        successfulUploads.push(
-          result.value
-        );
-      } else {
-        failedUploads.push(
-          result.reason
-        );
+        folder,
+
+        use_filename: true,
+
+        unique_filename: true,
+
+        overwrite: false
       }
-    }
-  );
-
-  /*
-   * Si una sola subida falló, revertimos las que
-   * ya se habían completado.
-   */
-
-  if (failedUploads.length) {
-    await Promise.allSettled(
-      successfulUploads.map(
-        (item) =>
-          destroyCloudinaryAsset(
-            item.uploadedAsset
-          )
-      )
     );
 
-    throw (
-      failedUploads[0] ||
-      new Error(
-        'No fue posible subir todos los archivos.'
-      )
+  if (!result?.secure_url) {
+    throw new Error(
+      'Cloudinary no devolvió una URL válida.'
     );
   }
 
-  return successfulUploads;
+  return result.secure_url;
 }
 
 /*
  * =========================================================
- * CONTROLLER
+ * CONTROLLER LEGACY
  * =========================================================
+ *
+ * Este controller seguirá funcionando mientras terminamos
+ * la migración.
+ *
+ * IMPORTANTE:
+ *
+ * Sigue teniendo la limitación de tamaño de Vercel.
+ * weddingService.js dejará de utilizarlo en el siguiente
+ * cambio.
  */
 
 exports.uploadWeddingMedia =
@@ -560,96 +478,76 @@ exports.uploadWeddingMedia =
       }
 
       /*
-       * ===================================================
-       * SUBIR A CLOUDINARY
-       * ===================================================
+       * =====================================================
+       * SUBIDAS
+       * =====================================================
        */
 
-      const uploadedFiles =
-        await uploadWeddingFiles({
-          coverImageFile,
+      const [
+        coverImage,
+        coupleImage,
+        backgroundMusic,
+        gallery
+      ] = await Promise.all([
+        coverImageFile
+          ? uploadLegacyFile(
+              coverImageFile,
+              {
+                resourceType:
+                  'image',
 
-          coupleImageFile,
+                folder:
+                  CLOUDINARY_IMAGE_FOLDER
+              }
+            )
+          : Promise.resolve(''),
 
-          backgroundMusicFile,
+        coupleImageFile
+          ? uploadLegacyFile(
+              coupleImageFile,
+              {
+                resourceType:
+                  'image',
 
-          galleryFiles
-        });
+                folder:
+                  CLOUDINARY_IMAGE_FOLDER
+              }
+            )
+          : Promise.resolve(''),
+
+        backgroundMusicFile
+          ? uploadLegacyFile(
+              backgroundMusicFile,
+              {
+                resourceType:
+                  'video',
+
+                folder:
+                  CLOUDINARY_AUDIO_FOLDER
+              }
+            )
+          : Promise.resolve(''),
+
+        Promise.all(
+          galleryFiles.map(
+            (file) =>
+              uploadLegacyFile(
+                file,
+                {
+                  resourceType:
+                    'image',
+
+                  folder:
+                    CLOUDINARY_IMAGE_FOLDER
+                }
+              )
+          )
+        )
+      ]);
 
       /*
-       * ===================================================
-       * RECONSTRUIR RESPUESTA
-       * ===================================================
-       */
-
-      const coverUpload =
-        uploadedFiles.find(
-          (item) =>
-            item.type ===
-            'coverImage'
-        );
-
-      const coupleUpload =
-        uploadedFiles.find(
-          (item) =>
-            item.type ===
-            'coupleImage'
-        );
-
-      const musicUpload =
-        uploadedFiles.find(
-          (item) =>
-            item.type ===
-            'backgroundMusic'
-        );
-
-      const galleryUploads =
-        uploadedFiles
-          .filter(
-            (item) =>
-              item.type ===
-              'gallery'
-          )
-          .sort(
-            (a, b) =>
-              a.index - b.index
-          );
-
-      const coverImage =
-        coverUpload
-          ?.uploadedAsset
-          ?.url ||
-        '';
-
-      const coupleImage =
-        coupleUpload
-          ?.uploadedAsset
-          ?.url ||
-        '';
-
-      const musicUrl =
-        musicUpload
-          ?.uploadedAsset
-          ?.url ||
-        '';
-
-      const gallery =
-        galleryUploads
-          .map(
-            (item) =>
-              item.uploadedAsset
-                ?.url ||
-              ''
-          )
-          .filter(Boolean);
-
-      /*
-       * ===================================================
-       * MISMO FORMATO QUE YA USA BODASYNC
-       * ===================================================
-       *
-       * No cambiamos la estructura que consume
-       * weddingService.js.
+       * Mantenemos exactamente el formato que ya
+       * consume weddingService.js.
        */
 
       const media = {
@@ -657,21 +555,13 @@ exports.uploadWeddingMedia =
 
         coupleImage,
 
-        /*
-         * Campo utilizado por la invitación pública.
-         */
+        backgroundMusic,
 
-        musicUrl,
+        musicUrl:
+          backgroundMusic,
 
-        /*
-         * Alias utilizado por el administrador
-         * y versiones anteriores.
-         */
-
-        backgroundMusic:
-          musicUrl,
-
-        gallery
+        gallery:
+          gallery.filter(Boolean)
       };
 
       return res
@@ -692,8 +582,7 @@ exports.uploadWeddingMedia =
         .status(500)
         .json({
           message:
-            process.env
-              .NODE_ENV ===
+            process.env.NODE_ENV ===
             'development'
               ? error?.message ||
                 'No fue posible subir los archivos.'

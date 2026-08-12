@@ -3,6 +3,10 @@ const DEFAULT_SERVER_URL = 'http://localhost:5000';
 const ADMIN_TOKEN_STORAGE_KEY =
   'bodasync:admin-google-id-token:v1';
 
+const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_AUDIO_FILE_SIZE = 12 * 1024 * 1024;
+const MAX_GALLERY_FILES = 8;
+
 let adminAuthToken = '';
 
 function cleanText(value) {
@@ -38,18 +42,6 @@ export const API_BASE_URL = getApiBaseUrl();
  * =========================================================
  * AUTENTICACIÓN ADMINISTRATIVA
  * =========================================================
- *
- * El token de Google se conserva únicamente durante
- * la sesión actual del navegador.
- *
- * El componente de login llamará:
- *
- * setAdminAuthToken(response.credential)
- *
- * y todas las peticiones administrativas comenzarán
- * automáticamente a enviar:
- *
- * Authorization: Bearer <google-id-token>
  */
 
 function getSessionStorage() {
@@ -65,13 +57,11 @@ function getSessionStorage() {
 }
 
 export function setAdminAuthToken(token) {
-  const normalizedToken =
-    cleanText(token);
+  const normalizedToken = cleanText(token);
 
   adminAuthToken = normalizedToken;
 
-  const storage =
-    getSessionStorage();
+  const storage = getSessionStorage();
 
   if (!storage) {
     return normalizedToken;
@@ -89,8 +79,10 @@ export function setAdminAuthToken(token) {
       );
     }
   } catch {
-    // Si sessionStorage no está disponible,
-    // conservamos el token solamente en memoria.
+    /*
+     * Si sessionStorage no está disponible,
+     * conservamos el token únicamente en memoria.
+     */
   }
 
   return normalizedToken;
@@ -101,20 +93,18 @@ export function getAdminAuthToken() {
     return adminAuthToken;
   }
 
-  const storage =
-    getSessionStorage();
+  const storage = getSessionStorage();
 
   if (!storage) {
     return '';
   }
 
   try {
-    const storedToken =
-      cleanText(
-        storage.getItem(
-          ADMIN_TOKEN_STORAGE_KEY
-        )
-      );
+    const storedToken = cleanText(
+      storage.getItem(
+        ADMIN_TOKEN_STORAGE_KEY
+      )
+    );
 
     if (storedToken) {
       adminAuthToken = storedToken;
@@ -129,8 +119,7 @@ export function getAdminAuthToken() {
 export function clearAdminAuthToken() {
   adminAuthToken = '';
 
-  const storage =
-    getSessionStorage();
+  const storage = getSessionStorage();
 
   if (!storage) {
     return;
@@ -141,7 +130,10 @@ export function clearAdminAuthToken() {
       ADMIN_TOKEN_STORAGE_KEY
     );
   } catch {
-    // No necesitamos hacer nada más.
+    /*
+     * No necesitamos realizar ninguna
+     * acción adicional.
+     */
   }
 }
 
@@ -162,14 +154,10 @@ export class WeddingServiceError extends Error {
     super(message);
 
     this.name = 'WeddingServiceError';
-
-    this.status =
-      options.status || 0;
-
+    this.status = options.status || 0;
     this.code =
       options.code ||
       'WEDDING_SERVICE_ERROR';
-
     this.details =
       options.details || null;
   }
@@ -221,19 +209,25 @@ function getErrorMessage(
   }
 
   if (
-    typeof data?.message ===
-      'string' &&
+    typeof data?.message === 'string' &&
     data.message.trim()
   ) {
     return data.message.trim();
   }
 
   if (
-    typeof data?.error ===
-      'string' &&
+    typeof data?.error === 'string' &&
     data.error.trim()
   ) {
     return data.error.trim();
+  }
+
+  if (
+    typeof data?.error?.message ===
+      'string' &&
+    data.error.message.trim()
+  ) {
+    return data.error.message.trim();
   }
 
   return fallbackMessage;
@@ -241,16 +235,15 @@ function getErrorMessage(
 
 /*
  * =========================================================
- * REQUEST
+ * REQUEST BODASYNC API
  * =========================================================
  *
- * Todas las peticiones pasan por aquí.
+ * Todas las peticiones administrativas pasan por aquí.
  *
  * Si existe una sesión administrativa activa,
- * enviamos automáticamente el token de Google.
+ * se añade automáticamente:
  *
- * Las rutas públicas funcionan normalmente incluso
- * si no existe token.
+ * Authorization: Bearer <google-token>
  */
 
 async function request(
@@ -291,12 +284,8 @@ async function request(
   }
 
   /*
-   * Cuando mandamos FormData NO debemos
-   * establecer Content-Type manualmente.
-   *
-   * El navegador genera automáticamente:
-   *
-   * multipart/form-data; boundary=...
+   * Con FormData no establecemos Content-Type.
+   * El navegador genera automáticamente el boundary.
    */
 
   if (
@@ -329,9 +318,7 @@ async function request(
       }
     );
   } catch (error) {
-    if (
-      error?.name === 'AbortError'
-    ) {
+    if (error?.name === 'AbortError') {
       throw error;
     }
 
@@ -357,13 +344,6 @@ async function request(
     }
 
     if (response.status === 401) {
-      /*
-       * Un 401 significa normalmente que el token
-       * expiró o dejó de ser válido.
-       *
-       * Lo eliminamos para obligar a iniciar
-       * sesión nuevamente.
-       */
       clearAdminAuthToken();
 
       fallbackMessage =
@@ -494,132 +474,86 @@ function getUrlFromMediaItem(
   return '';
 }
 
-function hasFilesInFormData(
-  formData
-) {
-  for (
-    const [, value]
-    of formData.entries()
-  ) {
-    if (
-      typeof File !== 'undefined' &&
-      value instanceof File
-    ) {
-      return true;
-    }
-
-    if (
-      typeof Blob !== 'undefined' &&
-      value instanceof Blob
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+function getFileDisplayName(file) {
+  return cleanText(
+    file?.name ||
+      file?.originalname ||
+      'archivo'
+  );
 }
 
 /*
  * =========================================================
- * NORMALIZAR MEDIA DEL SERVIDOR
+ * VALIDAR ARCHIVOS ANTES DE CLOUDINARY
  * =========================================================
+ *
+ * Conservamos los límites que ya manejaba
+ * BodaSync en el servidor:
+ *
+ * imágenes: 5 MB
+ * audio: 12 MB
  */
 
-function normalizeUploadedMedia(
-  response
+function validateDirectUploadFile(
+  file,
+  resourceType
 ) {
-  const source =
-    response?.media ||
-    response?.data?.media ||
-    response?.data ||
-    response ||
-    {};
-
-  if (
-    !source ||
-    typeof source !== 'object' ||
-    Array.isArray(source)
-  ) {
-    return {
-      coverImage: '',
-      coupleImage: '',
-      backgroundMusic: '',
-      musicUrl: '',
-      gallery: []
-    };
+  if (!file) {
+    throw new WeddingServiceError(
+      'No se proporcionó un archivo para subir.',
+      {
+        code:
+          'INVALID_UPLOAD_FILE'
+      }
+    );
   }
 
-  const coverImage =
-    cleanText(
-      source.coverImage ||
-        source.heroImage ||
-        source.cover ||
-        ''
+  const fileSize =
+    Number(file.size) || 0;
+
+  const fileName =
+    getFileDisplayName(file);
+
+  if (
+    resourceType === 'image' &&
+    fileSize >
+      MAX_IMAGE_FILE_SIZE
+  ) {
+    throw new WeddingServiceError(
+      `${fileName} supera el límite de 5 MB para imágenes.`,
+      {
+        code:
+          'IMAGE_TOO_LARGE'
+      }
     );
+  }
 
-  const coupleImage =
-    cleanText(
-      source.coupleImage ||
-        source.storyImage ||
-        source.couple ||
-        ''
+  if (
+    resourceType === 'video' &&
+    fileSize >
+      MAX_AUDIO_FILE_SIZE
+  ) {
+    throw new WeddingServiceError(
+      `${fileName} supera el límite de 12 MB para audio.`,
+      {
+        code:
+          'AUDIO_TOO_LARGE'
+      }
     );
+  }
 
-  const backgroundMusic =
-    cleanText(
-      source.backgroundMusic ||
-        source.musicUrl ||
-        source.music ||
-        ''
-    );
-
-  const gallerySource =
-    Array.isArray(source.gallery)
-      ? source.gallery
-      : Array.isArray(source.photos)
-        ? source.photos
-        : [];
-
-  const gallery =
-    gallerySource
-      .map((item) => {
-        if (
-          typeof item === 'string'
-        ) {
-          return cleanText(item);
-        }
-
-        if (
-          item &&
-          typeof item === 'object'
-        ) {
-          return cleanText(
-            item.url ||
-              item.path ||
-              item.secureUrl ||
-              item.secure_url ||
-              item.fileUrl ||
-              ''
-          );
-        }
-
-        return '';
-      })
-      .filter(Boolean);
-
-  return {
-    coverImage,
-    coupleImage,
-    backgroundMusic,
-    musicUrl: backgroundMusic,
-    gallery
-  };
+  return true;
 }
 
 /*
  * =========================================================
  * MEDIA YA EXISTENTE
  * =========================================================
+ *
+ * Cuando editamos una invitación podemos tener URLs
+ * de Cloudinary mezcladas con File nuevos.
+ *
+ * Las URLs existentes deben conservarse.
  */
 
 function getExistingMediaUrls(
@@ -632,7 +566,10 @@ function getExistingMediaUrls(
             getUrlFromMediaItem(item)
           )
           .filter(Boolean)
-          .slice(0, 8)
+          .slice(
+            0,
+            MAX_GALLERY_FILES
+          )
       : [];
 
   const backgroundMusic =
@@ -666,6 +603,12 @@ function getExistingMediaUrls(
  * =========================================================
  * COMBINAR MEDIA
  * =========================================================
+ *
+ * Conservamos el mismo comportamiento que ya tenía
+ * BodaSync.
+ *
+ * La media recién subida tiene prioridad.
+ * Si un archivo no fue reemplazado se conserva su URL.
  */
 
 function mergeMedia(
@@ -730,106 +673,501 @@ function mergeMedia(
 
 /*
  * =========================================================
- * SUBIR FOTOGRAFÍAS Y MÚSICA
+ * PEDIR FIRMA DE CLOUDINARY
  * =========================================================
+ *
+ * Esta petición es pequeña.
+ *
+ * NO contiene el archivo.
+ *
+ * POST /api/uploads/signature
  */
 
-export async function uploadWeddingMedia(
-  media = {},
+async function getCloudinaryUploadSignature(
+  resourceType,
   options = {}
 ) {
+  const response =
+    await request(
+      '/uploads/signature',
+      {
+        method: 'POST',
+
+        body: {
+          resourceType
+        },
+
+        signal:
+          options.signal
+      }
+    );
+
+  const cloudName =
+    cleanText(
+      response?.cloudName
+    );
+
+  const apiKey =
+    cleanText(
+      response?.apiKey
+    );
+
+  const signature =
+    cleanText(
+      response?.signature
+    );
+
+  const assetFolder =
+    cleanText(
+      response?.assetFolder
+    );
+
+  const uploadUrl =
+    cleanText(
+      response?.uploadUrl
+    );
+
+  const normalizedResourceType =
+    cleanText(
+      response?.resourceType
+    );
+
+  const timestamp =
+    Number(
+      response?.timestamp
+    );
+
+  if (
+    !cloudName ||
+    !apiKey ||
+    !signature ||
+    !assetFolder ||
+    !uploadUrl ||
+    !normalizedResourceType ||
+    !Number.isFinite(timestamp)
+  ) {
+    throw new WeddingServiceError(
+      'Cloudinary no devolvió una firma de subida válida.',
+      {
+        code:
+          'INVALID_CLOUDINARY_SIGNATURE',
+        details: response
+      }
+    );
+  }
+
+  return {
+    cloudName,
+    apiKey,
+    timestamp,
+    signature,
+    assetFolder,
+    resourceType:
+      normalizedResourceType,
+    uploadUrl
+  };
+}
+
+/*
+ * =========================================================
+ * SUBIDA DIRECTA A CLOUDINARY
+ * =========================================================
+ *
+ * IMPORTANTE:
+ *
+ * Esta petición NO pasa por Vercel.
+ *
+ * Navegador
+ *    ↓
+ * Cloudinary
+ *
+ * Esto evita el error 413 causado por enviar todas las
+ * imágenes y música juntas a una Vercel Function.
+ */
+
+async function uploadFileDirectlyToCloudinary(
+  file,
+  signatureData,
+  options = {}
+) {
+  const resourceType =
+    cleanText(
+      signatureData?.resourceType
+    );
+
+  validateDirectUploadFile(
+    file,
+    resourceType
+  );
+
   const formData =
     new FormData();
 
-  const existingMedia =
-    getExistingMediaUrls(media);
-
-  const coverImage =
-    getFileFromMediaItem(
-      media.coverImage
-    );
-
-  const coupleImage =
-    getFileFromMediaItem(
-      media.coupleImage
-    );
-
-  const backgroundMusic =
-    getFileFromMediaItem(
-      media.backgroundMusic ||
-        media.musicUrl ||
-        media.music
-    );
-
-  if (coverImage) {
-    formData.append(
-      'coverImage',
-      coverImage
-    );
-  }
-
-  if (coupleImage) {
-    formData.append(
-      'coupleImage',
-      coupleImage
-    );
-  }
-
-  if (backgroundMusic) {
-    formData.append(
-      'backgroundMusic',
-      backgroundMusic
-    );
-  }
-
-  const gallery =
-    Array.isArray(media.gallery)
-      ? media.gallery
-      : [];
-
-  gallery
-    .slice(0, 8)
-    .forEach((galleryItem) => {
-      const file =
-        getFileFromMediaItem(
-          galleryItem
-        );
-
-      if (file) {
-        formData.append(
-          'gallery',
-          file
-        );
-      }
-    });
-
   /*
-   * Si no hay archivos nuevos,
-   * devolvemos las URLs existentes.
+   * file no forma parte de la firma.
    */
 
-  if (
-    !hasFilesInFormData(formData)
-  ) {
-    return {
-      media: existingMedia
-    };
-  }
+  formData.append(
+    'file',
+    file
+  );
 
-  const response =
-    await request(
-      '/uploads',
+  /*
+   * api_key tampoco forma parte de la firma,
+   * pero Cloudinary lo requiere en el request.
+   */
+
+  formData.append(
+    'api_key',
+    signatureData.apiKey
+  );
+
+  /*
+   * Estos valores deben coincidir exactamente
+   * con los valores utilizados por el backend
+   * para generar la firma.
+   */
+
+  formData.append(
+    'timestamp',
+    String(
+      signatureData.timestamp
+    )
+  );
+
+  formData.append(
+    'signature',
+    signatureData.signature
+  );
+
+  formData.append(
+    'asset_folder',
+    signatureData.assetFolder
+  );
+
+  let response;
+
+  try {
+    response = await fetch(
+      signatureData.uploadUrl,
       {
         method: 'POST',
         body: formData,
         signal: options.signal
       }
     );
+  } catch (error) {
+    if (
+      error?.name ===
+      'AbortError'
+    ) {
+      throw error;
+    }
 
-  const uploadedMedia =
-    normalizeUploadedMedia(
-      response
+    throw new WeddingServiceError(
+      `No fue posible subir ${getFileDisplayName(
+        file
+      )} a Cloudinary.`,
+      {
+        code:
+          'CLOUDINARY_NETWORK_ERROR',
+        details: error
+      }
     );
+  }
+
+  const data =
+    await parseResponse(response);
+
+  if (!response.ok) {
+    throw new WeddingServiceError(
+      getErrorMessage(
+        data,
+        `Cloudinary rechazó ${getFileDisplayName(
+          file
+        )}.`
+      ),
+      {
+        status:
+          response.status,
+
+        code:
+          'CLOUDINARY_UPLOAD_FAILED',
+
+        details:
+          data
+      }
+    );
+  }
+
+  const secureUrl =
+    cleanText(
+      data?.secure_url ||
+        data?.url
+    );
+
+  if (!secureUrl) {
+    throw new WeddingServiceError(
+      'Cloudinary terminó la subida pero no devolvió una URL válida.',
+      {
+        code:
+          'CLOUDINARY_INVALID_RESPONSE',
+
+        details:
+          data
+      }
+    );
+  }
+
+  return secureUrl;
+}
+
+/*
+ * =========================================================
+ * SUBIR FOTOGRAFÍAS Y MÚSICA
+ * =========================================================
+ *
+ * NUEVO FLUJO:
+ *
+ * 1. BodaSync pide una firma pequeña a Vercel.
+ * 2. El navegador sube los archivos directamente
+ *    a Cloudinary.
+ * 3. Cloudinary devuelve las URLs.
+ * 4. useWeddingBuilder recibe exactamente:
+ *
+ * {
+ *   media: {
+ *     coverImage,
+ *     coupleImage,
+ *     backgroundMusic,
+ *     musicUrl,
+ *     gallery
+ *   }
+ * }
+ *
+ * Por eso no necesitamos modificar useWeddingBuilder.
+ */
+
+export async function uploadWeddingMedia(
+  media = {},
+  options = {}
+) {
+  const existingMedia =
+    getExistingMediaUrls(media);
+
+  const coverImageFile =
+    getFileFromMediaItem(
+      media.coverImage
+    );
+
+  const coupleImageFile =
+    getFileFromMediaItem(
+      media.coupleImage
+    );
+
+  const backgroundMusicFile =
+    getFileFromMediaItem(
+      media.backgroundMusic ||
+        media.musicUrl ||
+        media.music
+    );
+
+  const gallery =
+    Array.isArray(media.gallery)
+      ? media.gallery
+      : [];
+
+  const galleryFiles =
+    gallery
+      .slice(
+        0,
+        MAX_GALLERY_FILES
+      )
+      .map((item) =>
+        getFileFromMediaItem(item)
+      )
+      .filter(Boolean);
+
+  const hasNewImages =
+    Boolean(
+      coverImageFile ||
+        coupleImageFile ||
+        galleryFiles.length
+    );
+
+  const hasNewAudio =
+    Boolean(
+      backgroundMusicFile
+    );
+
+  /*
+   * Si no existen nuevos archivos,
+   * devolvemos directamente las URLs existentes.
+   */
+
+  if (
+    !hasNewImages &&
+    !hasNewAudio
+  ) {
+    return {
+      media:
+        existingMedia
+    };
+  }
+
+  /*
+   * =======================================================
+   * PEDIR FIRMAS
+   * =======================================================
+   *
+   * Una firma para imágenes.
+   * Una firma para audio.
+   *
+   * Podemos reutilizar la misma firma para todos los
+   * archivos que compartan exactamente sus parámetros.
+   */
+
+  const [
+    imageSignature,
+    audioSignature
+  ] = await Promise.all([
+    hasNewImages
+      ? getCloudinaryUploadSignature(
+          'image',
+          {
+            signal:
+              options.signal
+          }
+        )
+      : Promise.resolve(null),
+
+    hasNewAudio
+      ? getCloudinaryUploadSignature(
+          'video',
+          {
+            signal:
+              options.signal
+          }
+        )
+      : Promise.resolve(null)
+  ]);
+
+  /*
+   * =======================================================
+   * SUBIR PORTADA
+   * =======================================================
+   */
+
+  const coverUploadPromise =
+    coverImageFile
+      ? uploadFileDirectlyToCloudinary(
+          coverImageFile,
+          imageSignature,
+          {
+            signal:
+              options.signal
+          }
+        )
+      : Promise.resolve('');
+
+  /*
+   * =======================================================
+   * SUBIR FOTO DE PAREJA
+   * =======================================================
+   */
+
+  const coupleUploadPromise =
+    coupleImageFile
+      ? uploadFileDirectlyToCloudinary(
+          coupleImageFile,
+          imageSignature,
+          {
+            signal:
+              options.signal
+          }
+        )
+      : Promise.resolve('');
+
+  /*
+   * =======================================================
+   * SUBIR MÚSICA
+   * =======================================================
+   */
+
+  const musicUploadPromise =
+    backgroundMusicFile
+      ? uploadFileDirectlyToCloudinary(
+          backgroundMusicFile,
+          audioSignature,
+          {
+            signal:
+              options.signal
+          }
+        )
+      : Promise.resolve('');
+
+  /*
+   * =======================================================
+   * SUBIR GALERÍA
+   * =======================================================
+   *
+   * Promise.all conserva el orden del arreglo original.
+   */
+
+  const galleryUploadPromise =
+    Promise.all(
+      galleryFiles.map((file) =>
+        uploadFileDirectlyToCloudinary(
+          file,
+          imageSignature,
+          {
+            signal:
+              options.signal
+          }
+        )
+      )
+    );
+
+  const [
+    uploadedCoverImage,
+    uploadedCoupleImage,
+    uploadedBackgroundMusic,
+    uploadedGallery
+  ] = await Promise.all([
+    coverUploadPromise,
+    coupleUploadPromise,
+    musicUploadPromise,
+    galleryUploadPromise
+  ]);
+
+  /*
+   * =======================================================
+   * MEDIA RECIÉN SUBIDA
+   * =======================================================
+   */
+
+  const uploadedMedia = {
+    coverImage:
+      uploadedCoverImage,
+
+    coupleImage:
+      uploadedCoupleImage,
+
+    backgroundMusic:
+      uploadedBackgroundMusic,
+
+    musicUrl:
+      uploadedBackgroundMusic,
+
+    gallery:
+      uploadedGallery
+  };
+
+  /*
+   * =======================================================
+   * CONSERVAR MEDIA EXISTENTE
+   * =======================================================
+   */
 
   const finalMedia =
     mergeMedia(
@@ -838,7 +1176,8 @@ export async function uploadWeddingMedia(
     );
 
   return {
-    media: finalMedia
+    media:
+      finalMedia
   };
 }
 
@@ -854,7 +1193,8 @@ export async function createWedding(
 ) {
   if (
     !weddingData ||
-    typeof weddingData !== 'object'
+    typeof weddingData !==
+      'object'
   ) {
     throw new WeddingServiceError(
       'No se proporcionó la información de la invitación.',
@@ -888,7 +1228,9 @@ export async function updateWedding(
 ) {
   const normalizedId =
     cleanText(
-      String(weddingId || '')
+      String(
+        weddingId || ''
+      )
     );
 
   if (!normalizedId) {
@@ -903,8 +1245,11 @@ export async function updateWedding(
 
   if (
     !weddingData ||
-    typeof weddingData !== 'object' ||
-    Array.isArray(weddingData)
+    typeof weddingData !==
+      'object' ||
+    Array.isArray(
+      weddingData
+    )
   ) {
     throw new WeddingServiceError(
       'No se proporcionó la información que deseas actualizar.',
@@ -933,7 +1278,6 @@ export async function updateWedding(
  * =========================================================
  *
  * Ruta administrativa.
- * El token se añade automáticamente por request().
  */
 
 export async function getWeddings(
@@ -942,17 +1286,16 @@ export async function getWeddings(
   return request(
     '/weddings',
     {
-      signal: options.signal
+      signal:
+        options.signal
     }
   );
 }
 
 /*
  * =========================================================
- * OBTENER INVITACIÓN POR SLUG
+ * OBTENER INVITACIÓN PÚBLICA POR SLUG
  * =========================================================
- *
- * Esta ruta permanece pública en el backend.
  */
 
 export async function getWeddingBySlug(
@@ -977,7 +1320,8 @@ export async function getWeddingBySlug(
       normalizedSlug
     )}`,
     {
-      signal: options.signal
+      signal:
+        options.signal
     }
   );
 }
@@ -994,7 +1338,9 @@ export async function deleteWedding(
 ) {
   const normalizedId =
     cleanText(
-      String(weddingId || '')
+      String(
+        weddingId || ''
+      )
     );
 
   if (!normalizedId) {
@@ -1012,8 +1358,11 @@ export async function deleteWedding(
       normalizedId
     )}`,
     {
-      method: 'DELETE',
-      signal: options.signal
+      method:
+        'DELETE',
+
+      signal:
+        options.signal
     }
   );
 }
@@ -1040,7 +1389,8 @@ export function getWeddingServiceErrorMessage(
   error
 ) {
   if (
-    error?.name === 'AbortError'
+    error?.name ===
+    'AbortError'
   ) {
     return '';
   }

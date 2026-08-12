@@ -5,7 +5,8 @@ const {
 } = require('../middleware/upload');
 
 const {
-  uploadWeddingMedia: uploadWeddingMediaController
+  uploadWeddingMedia: uploadWeddingMediaController,
+  createUploadSignature
 } = require('../controllers/uploadController');
 
 const {
@@ -16,24 +17,42 @@ const router = express.Router();
 
 /*
  * =========================================================
- * SUBIR MULTIMEDIA
+ * FIRMA PARA SUBIDA DIRECTA A CLOUDINARY
+ * =========================================================
+ *
+ * POST /api/uploads/signature
+ *
+ * Esta ruta NO recibe imágenes ni música.
+ *
+ * Únicamente:
+ * - verifica que el usuario sea administrador
+ * - genera una firma segura de Cloudinary
+ * - devuelve los datos necesarios para subir
+ *   directamente desde el navegador
+ *
+ * El CLOUDINARY_API_SECRET nunca sale del servidor.
+ */
+
+router.post(
+  '/signature',
+  requireAdmin,
+  createUploadSignature
+);
+
+/*
+ * =========================================================
+ * SUBIDA MULTIMEDIA LEGACY
  * =========================================================
  *
  * POST /api/uploads
  *
- * Fotografías:
- * - portada
- * - pareja
- * - galería
+ * Esta ruta se conserva temporalmente mientras migramos
+ * weddingService.js a la subida directa.
  *
- * Audio:
- * - música de fondo
+ * Todavía pasa los archivos por Vercel, por lo que puede
+ * alcanzar el límite 413 con archivos grandes.
  *
- * Solo el administrador autenticado puede subir archivos.
- *
- * requireAdmin se ejecuta ANTES de Multer para evitar que
- * usuarios no autorizados puedan enviar archivos o consumir
- * recursos del servidor.
+ * Cuando terminemos la migración podremos retirarla.
  */
 
 router.post(
