@@ -1,11 +1,58 @@
 const express = require('express');
+
+const {
+  createWedding,
+  getWeddings,
+  getWeddingBySlug,
+  updateWedding,
+  deleteWedding
+} = require('../controllers/weddingController');
+
 const router = express.Router();
-const weddingController = require('../controllers/weddingController');
 
-// Ruta GET pública: localhost:5000/api/weddings/manuel-y-luz-2026
-router.get('/:slug', weddingController.getWeddingBySlug);
+/*
+ * =========================================================
+ * CREAR INVITACIÓN
+ * =========================================================
+ */
 
-// Ruta POST privada (para el panel admin): localhost:5000/api/weddings
-router.post('/', weddingController.createWedding);
+router.post('/', createWedding);
+
+/*
+ * =========================================================
+ * LISTAR INVITACIONES
+ * =========================================================
+ */
+
+router.get('/', getWeddings);
+
+/*
+ * =========================================================
+ * ACTUALIZAR INVITACIÓN
+ * =========================================================
+ *
+ * PUT /api/weddings/:id
+ *
+ * Permitirá editar una boda existente sin generar
+ * un nuevo slug ni una invitación duplicada.
+ */
+
+router.put('/:id', updateWedding);
+
+/*
+ * =========================================================
+ * CONSULTAR INVITACIÓN PÚBLICA
+ * =========================================================
+ */
+
+router.get('/:slug', getWeddingBySlug);
+
+/*
+ * =========================================================
+ * ELIMINAR INVITACIÓN
+ * =========================================================
+ */
+
+router.delete('/:id', deleteWedding);
 
 module.exports = router;
