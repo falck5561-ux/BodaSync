@@ -196,6 +196,11 @@ async function request(
         'No se encontró la información solicitada.';
     }
 
+    if (response.status === 409) {
+      fallbackMessage =
+        'Existe un conflicto con la información enviada.';
+    }
+
     if (response.status === 413) {
       fallbackMessage =
         'Uno de los archivos es demasiado grande.';
@@ -691,18 +696,9 @@ export async function uploadWeddingMedia(
    * SIN ARCHIVOS NUEVOS
    * =======================================================
    *
-   * Antes devolvía:
-   *
-   * {
-   *   coverImage: '',
-   *   ...
-   * }
-   *
-   * pero useWeddingBuilder esperaba:
+   * useWeddingBuilder espera siempre:
    *
    * uploadResponse.media
-   *
-   * Ahora devolvemos siempre la misma estructura.
    */
 
   if (
@@ -745,19 +741,6 @@ export async function uploadWeddingMedia(
       uploadedMedia
     );
 
-  /*
-   * =======================================================
-   * ESTRUCTURA CORRECTA
-   * =======================================================
-   *
-   * useWeddingBuilder hace:
-   *
-   * uploadedMedia:
-   *   uploadResponse?.media || {}
-   *
-   * por eso DEBE existir .media.
-   */
-
   return {
     media: finalMedia
   };
@@ -789,6 +772,62 @@ export async function createWedding(
     '/weddings',
     {
       method: 'POST',
+      body: weddingData,
+      signal: options.signal
+    }
+  );
+}
+
+/*
+ * =========================================================
+ * ACTUALIZAR INVITACIÓN
+ * =========================================================
+ *
+ * PUT /api/weddings/:id
+ *
+ * Esta función NO crea una invitación nueva.
+ * Actualiza el documento existente y mantiene
+ * el mismo slug público.
+ */
+
+export async function updateWedding(
+  weddingId,
+  weddingData,
+  options = {}
+) {
+  const normalizedId =
+    cleanText(
+      String(weddingId || '')
+    );
+
+  if (!normalizedId) {
+    throw new WeddingServiceError(
+      'No se proporcionó el identificador de la invitación.',
+      {
+        code: 'INVALID_WEDDING_ID'
+      }
+    );
+  }
+
+  if (
+    !weddingData ||
+    typeof weddingData !== 'object' ||
+    Array.isArray(weddingData)
+  ) {
+    throw new WeddingServiceError(
+      'No se proporcionó la información que deseas actualizar.',
+      {
+        code: 'INVALID_WEDDING_DATA'
+      }
+    );
+  }
+
+  return request(
+    `/weddings/${encodeURIComponent(
+      normalizedId
+    )}`,
+    {
+      method: 'PUT',
       body: weddingData,
       signal: options.signal
     }
@@ -929,6 +968,7 @@ const weddingService = {
   uploadWeddingMedia,
 
   createWedding,
+  updateWedding,
 
   getWeddings,
   getAllWeddings,

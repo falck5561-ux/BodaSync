@@ -13,16 +13,66 @@ import SettingsSection from './sections/SettingsSection';
 
 export default function AdminDashboard() {
   const {
+    /*
+     * =====================================================
+     * NAVEGACIÓN
+     * =====================================================
+     */
+
     activeSection,
     changeSection,
 
     formTab,
     changeFormTab,
 
+    /*
+     * =====================================================
+     * MODO EDICIÓN
+     * =====================================================
+     */
+
+    isEditing,
+    editingWedding,
+    editingWeddingId,
+    editingWeddingSlug,
+
+    startEditingWedding,
+    cancelEditing,
+
+    /*
+     * =====================================================
+     * BORRADOR / AUTOGUARDADO
+     * =====================================================
+     */
+
+    hasRecoverableDraft,
+    hasLocalDraft,
+    recoverableDraft,
+    draftSavedAt,
+    draftStatus,
+    draftHasUnrestorableFiles,
+
+    restoreDraft,
+    discardDraft,
+    flushDraftNow,
+
+    /*
+     * =====================================================
+     * ALERTAS
+     * =====================================================
+     */
+
     error,
     setError,
+
     successMessage,
     setSuccessMessage,
+
+    /*
+     * =====================================================
+     * FORMULARIO
+     * =====================================================
+     */
 
     formData,
     handleChange,
@@ -33,9 +83,16 @@ export default function AdminDashboard() {
     activateAllSections,
     deactivateAllSections,
 
+    /*
+     * =====================================================
+     * ITINERARIO
+     * =====================================================
+     */
+
     itinerary,
     completedActivitiesCount,
     hasValidActivity,
+
     handleItineraryChange,
     addItineraryItem,
     removeItineraryItem,
@@ -45,23 +102,40 @@ export default function AdminDashboard() {
     sortItineraryByTime,
     clearItinerary,
 
+    /*
+     * =====================================================
+     * MULTIMEDIA
+     * =====================================================
+     */
+
     media,
     galleryCount,
     selectedMediaCount,
+
     handleCoverImageChange,
     handleCoupleImageChange,
     handleBackgroundMusicChange,
     handleGalleryChange,
+
     removeCoverImage,
     removeCoupleImage,
     removeBackgroundMusic,
     removeGalleryImage,
+
     moveGalleryImageUp,
     moveGalleryImageDown,
+
     clearGallery,
     clearMedia,
 
+    /*
+     * =====================================================
+     * EVENTOS
+     * =====================================================
+     */
+
     events,
+
     generatedWedding,
     setGeneratedWedding,
     generatedUrl,
@@ -72,10 +146,18 @@ export default function AdminDashboard() {
 
     loadEvents,
     handleDelete,
+
     copyWeddingUrl,
     copyGeneratedUrl,
+
     getWeddingUrl,
     formatDate,
+
+    /*
+     * =====================================================
+     * AJUSTES
+     * =====================================================
+     */
 
     settings,
 
@@ -86,8 +168,10 @@ export default function AdminDashboard() {
     adminThemeMode,
     defaultThemeMode,
     allowThemeToggle,
+
     confirmBeforeReset,
     compactSidebar,
+
     lastSavedAt,
     hasUnsavedChanges,
 
@@ -100,6 +184,12 @@ export default function AdminDashboard() {
     resetSettings,
     reloadSettings,
 
+    /*
+     * =====================================================
+     * ACCIONES
+     * =====================================================
+     */
+
     applyDefaultMessage,
 
     previewDate,
@@ -111,14 +201,9 @@ export default function AdminDashboard() {
   } = useWeddingBuilder();
 
   /*
-   * ========================================================
+   * =========================================================
    * AJUSTES RESUELTOS
-   * ========================================================
-   *
-   * La fuente principal es "settings".
-   *
-   * Los valores individuales solamente funcionan como
-   * respaldo por compatibilidad.
+   * =========================================================
    */
 
   const resolvedAdminThemeMode =
@@ -172,9 +257,117 @@ export default function AdminDashboard() {
       : defaultMessage || '';
 
   /*
-   * ========================================================
+   * =========================================================
+   * CREAR INVITACIÓN NUEVA
+   * =========================================================
+   */
+
+  function handleCreateNew() {
+    /*
+     * Si actualmente estamos editando una boda publicada,
+     * limpiamos ese modo antes de comenzar otra.
+     *
+     * Si únicamente existe un borrador recuperable,
+     * NO lo eliminamos aquí. El constructor mostrará
+     * las opciones:
+     *
+     * - Continuar borrador
+     * - Descartar
+     */
+
+    if (isEditing) {
+      resetBuilder({
+        force: true
+      });
+    }
+
+    changeSection('create');
+    changeFormTab('general');
+  }
+
+  /*
+   * =========================================================
+   * EDITAR INVITACIÓN
+   * =========================================================
+   */
+
+  function handleEditWedding(wedding) {
+    const started =
+      startEditingWedding?.(
+        wedding
+      );
+
+    if (!started) {
+      return;
+    }
+
+    changeSection('create');
+  }
+
+  /*
+   * =========================================================
+   * CANCELAR EDICIÓN
+   * =========================================================
+   */
+
+  function handleCancelEditing() {
+    const cancelled =
+      cancelEditing?.();
+
+    if (!cancelled) {
+      return;
+    }
+
+    changeSection('create');
+    changeFormTab('general');
+  }
+
+  /*
+   * =========================================================
+   * RECUPERAR BORRADOR
+   * =========================================================
+   */
+
+  function handleRestoreDraft() {
+    const restored =
+      restoreDraft?.();
+
+    if (!restored) {
+      return;
+    }
+
+    changeSection('create');
+  }
+
+  /*
+   * =========================================================
+   * DESCARTAR BORRADOR
+   * =========================================================
+   */
+
+  function handleDiscardDraft() {
+    discardDraft?.();
+  }
+
+  /*
+   * =========================================================
+   * GUARDAR BORRADOR MANUALMENTE
+   * =========================================================
+   *
+   * El autosave ya funciona automáticamente.
+   *
+   * Esta función queda disponible por si después queremos
+   * añadir un botón "Guardar ahora".
+   */
+
+  function handleSaveDraftNow() {
+    flushDraftNow?.();
+  }
+
+  /*
+   * =========================================================
    * SECCIÓN ACTIVA
-   * ========================================================
+   * =========================================================
    */
 
   function renderActiveSection() {
@@ -196,9 +389,8 @@ export default function AdminDashboard() {
             copyWeddingUrl={copyWeddingUrl}
             getWeddingUrl={getWeddingUrl}
             formatDate={formatDate}
-            onCreateNew={() => {
-              changeSection('create');
-            }}
+            onCreateNew={handleCreateNew}
+            onEditWedding={handleEditWedding}
           />
         );
 
@@ -221,8 +413,12 @@ export default function AdminDashboard() {
             hasUnsavedChanges={hasUnsavedChanges}
             updateSetting={updateSetting}
             handleSettingChange={handleSettingChange}
-            handleBusinessNameChange={handleBusinessNameChange}
-            handleDefaultMessageChange={handleDefaultMessageChange}
+            handleBusinessNameChange={
+              handleBusinessNameChange
+            }
+            handleDefaultMessageChange={
+              handleDefaultMessageChange
+            }
             handleSaveSettings={handleSaveSettings}
             resetSettings={resetSettings}
             reloadSettings={reloadSettings}
@@ -231,7 +427,7 @@ export default function AdminDashboard() {
 
       /*
        * =====================================================
-       * CREAR INVITACIÓN
+       * CREAR / EDITAR INVITACIÓN
        * =====================================================
        */
 
@@ -239,87 +435,293 @@ export default function AdminDashboard() {
       default:
         return (
           <CreateWeddingSection
+            /*
+             * ===============================================
+             * MODO EDICIÓN
+             * ===============================================
+             */
+
+            isEditing={isEditing}
+            editingWedding={editingWedding}
+            editingWeddingId={editingWeddingId}
+            editingWeddingSlug={editingWeddingSlug}
+            cancelEditing={handleCancelEditing}
+
+            /*
+             * ===============================================
+             * BORRADOR / AUTOGUARDADO
+             * ===============================================
+             */
+
+            hasRecoverableDraft={
+              hasRecoverableDraft
+            }
+            hasLocalDraft={
+              hasLocalDraft
+            }
+            recoverableDraft={
+              recoverableDraft
+            }
+            draftSavedAt={
+              draftSavedAt
+            }
+            draftStatus={
+              draftStatus
+            }
+            draftHasUnrestorableFiles={
+              draftHasUnrestorableFiles
+            }
+            restoreDraft={
+              handleRestoreDraft
+            }
+            discardDraft={
+              handleDiscardDraft
+            }
+            flushDraftNow={
+              handleSaveDraftNow
+            }
+
+            /*
+             * ===============================================
+             * NAVEGACIÓN
+             * ===============================================
+             */
+
             formTab={formTab}
             changeFormTab={changeFormTab}
+
+            /*
+             * ===============================================
+             * FORMULARIO
+             * ===============================================
+             */
+
             formData={formData}
             handleChange={handleChange}
             handleThemeChange={handleThemeChange}
             handleSectionToggle={handleSectionToggle}
-            activeSectionsCount={activeSectionsCount}
-            activateAllSections={activateAllSections}
-            deactivateAllSections={deactivateAllSections}
+
+            activeSectionsCount={
+              activeSectionsCount
+            }
+            activateAllSections={
+              activateAllSections
+            }
+            deactivateAllSections={
+              deactivateAllSections
+            }
+
+            /*
+             * ===============================================
+             * ITINERARIO
+             * ===============================================
+             */
+
             itinerary={itinerary}
-            completedActivitiesCount={completedActivitiesCount}
-            hasValidActivity={hasValidActivity}
-            handleItineraryChange={handleItineraryChange}
-            addItineraryItem={addItineraryItem}
-            removeItineraryItem={removeItineraryItem}
-            duplicateItineraryItem={duplicateItineraryItem}
-            moveItineraryItemUp={moveItineraryItemUp}
-            moveItineraryItemDown={moveItineraryItemDown}
-            sortItineraryByTime={sortItineraryByTime}
-            clearItinerary={clearItinerary}
+            completedActivitiesCount={
+              completedActivitiesCount
+            }
+            hasValidActivity={
+              hasValidActivity
+            }
+            handleItineraryChange={
+              handleItineraryChange
+            }
+            addItineraryItem={
+              addItineraryItem
+            }
+            removeItineraryItem={
+              removeItineraryItem
+            }
+            duplicateItineraryItem={
+              duplicateItineraryItem
+            }
+            moveItineraryItemUp={
+              moveItineraryItemUp
+            }
+            moveItineraryItemDown={
+              moveItineraryItemDown
+            }
+            sortItineraryByTime={
+              sortItineraryByTime
+            }
+            clearItinerary={
+              clearItinerary
+            }
+
+            /*
+             * ===============================================
+             * MULTIMEDIA
+             * ===============================================
+             */
+
             media={media}
             galleryCount={galleryCount}
-            selectedMediaCount={selectedMediaCount}
-            handleCoverImageChange={handleCoverImageChange}
-            handleCoupleImageChange={handleCoupleImageChange}
-            handleBackgroundMusicChange={handleBackgroundMusicChange}
-            handleGalleryChange={handleGalleryChange}
-            removeCoverImage={removeCoverImage}
-            removeCoupleImage={removeCoupleImage}
-            removeBackgroundMusic={removeBackgroundMusic}
-            removeGalleryImage={removeGalleryImage}
-            moveGalleryImageUp={moveGalleryImageUp}
-            moveGalleryImageDown={moveGalleryImageDown}
-            clearGallery={clearGallery}
-            clearMedia={clearMedia}
-            generatedWedding={generatedWedding}
-            generatedUrl={generatedUrl}
-            copyGeneratedUrl={copyGeneratedUrl}
-            setGeneratedWedding={setGeneratedWedding}
-            previewDate={previewDate}
-            builderSummary={builderSummary}
-            businessName={resolvedBusinessName}
-            applyDefaultMessage={applyDefaultMessage}
+            selectedMediaCount={
+              selectedMediaCount
+            }
+            handleCoverImageChange={
+              handleCoverImageChange
+            }
+            handleCoupleImageChange={
+              handleCoupleImageChange
+            }
+            handleBackgroundMusicChange={
+              handleBackgroundMusicChange
+            }
+            handleGalleryChange={
+              handleGalleryChange
+            }
+            removeCoverImage={
+              removeCoverImage
+            }
+            removeCoupleImage={
+              removeCoupleImage
+            }
+            removeBackgroundMusic={
+              removeBackgroundMusic
+            }
+            removeGalleryImage={
+              removeGalleryImage
+            }
+            moveGalleryImageUp={
+              moveGalleryImageUp
+            }
+            moveGalleryImageDown={
+              moveGalleryImageDown
+            }
+            clearGallery={
+              clearGallery
+            }
+            clearMedia={
+              clearMedia
+            }
+
+            /*
+             * ===============================================
+             * INVITACIÓN GUARDADA
+             * ===============================================
+             */
+
+            generatedWedding={
+              generatedWedding
+            }
+            generatedUrl={
+              generatedUrl
+            }
+            copyGeneratedUrl={
+              copyGeneratedUrl
+            }
+            setGeneratedWedding={
+              setGeneratedWedding
+            }
+
+            /*
+             * ===============================================
+             * VISTA PREVIA
+             * ===============================================
+             */
+
+            previewDate={
+              previewDate
+            }
+            builderSummary={
+              builderSummary
+            }
+
+            /*
+             * ===============================================
+             * NEGOCIO
+             * ===============================================
+             */
+
+            businessName={
+              resolvedBusinessName
+            }
+            applyDefaultMessage={
+              applyDefaultMessage
+            }
+
+            /*
+             * ===============================================
+             * ACCIONES
+             * ===============================================
+             */
+
             loading={loading}
-            confirmBeforeReset={resolvedConfirmBeforeReset}
-            handleSubmit={handleSubmit}
-            resetBuilder={resetBuilder}
-            goToGeneralInformation={goToGeneralInformation}
+            confirmBeforeReset={
+              resolvedConfirmBeforeReset
+            }
+            handleSubmit={
+              handleSubmit
+            }
+            resetBuilder={
+              resetBuilder
+            }
+            goToGeneralInformation={
+              goToGeneralInformation
+            }
           />
         );
     }
   }
 
   /*
-   * ========================================================
+   * =========================================================
    * RENDER
-   * ========================================================
+   * =========================================================
    */
 
   return (
     <div
       className="admin-dashboard"
-      data-admin-theme={resolvedAdminThemeMode}
+      data-admin-theme={
+        resolvedAdminThemeMode
+      }
+      data-builder-mode={
+        isEditing
+          ? 'editing'
+          : 'creating'
+      }
+      data-draft-status={
+        draftStatus || 'idle'
+      }
+      data-has-draft={
+        hasLocalDraft
+          ? 'true'
+          : 'false'
+      }
       style={{
-        '--admin-sidebar-width': resolvedCompactSidebar
-          ? '104px'
-          : '248px'
+        '--admin-sidebar-width':
+          resolvedCompactSidebar
+            ? '104px'
+            : '248px'
       }}
     >
       <DashboardSidebar
-        activeSection={activeSection}
-        businessName={resolvedBusinessName}
-        sidebarSubtitle={resolvedSidebarSubtitle}
+        activeSection={
+          activeSection
+        }
+        businessName={
+          resolvedBusinessName
+        }
+        sidebarSubtitle={
+          resolvedSidebarSubtitle
+        }
         eventsCount={
           Array.isArray(events)
             ? events.length
             : 0
         }
-        compactSidebar={resolvedCompactSidebar}
-        hasUnsavedChanges={hasUnsavedChanges}
-        onSectionChange={changeSection}
+        compactSidebar={
+          resolvedCompactSidebar
+        }
+        hasUnsavedChanges={
+          hasUnsavedChanges
+        }
+        onSectionChange={
+          changeSection
+        }
       />
 
       <main className="dashboard-main">
@@ -338,7 +740,9 @@ export default function AdminDashboard() {
 
           <AlertMessage
             type="success"
-            message={successMessage}
+            message={
+              successMessage
+            }
             duration={3800}
             onClose={() => {
               setSuccessMessage('');

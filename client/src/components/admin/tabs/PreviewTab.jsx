@@ -519,8 +519,12 @@ export default function PreviewTab({
   previewDate = '',
   builderSummary = {},
   loading = false,
+  isEditing = false,
+  editingWedding = null,
+  editingWeddingSlug = '',
   onEdit,
-  onCreateInvitation
+  onCreateInvitation,
+  onSaveChanges
 }) {
   const isNarrow = useMediaQuery(
     '(max-width: 1080px)'
@@ -566,6 +570,19 @@ export default function PreviewTab({
     brideName,
     groomName
   ]);
+
+  const resolvedEditingSlug = cleanText(
+    editingWeddingSlug ||
+      editingWedding?.slug ||
+      ''
+  );
+
+  const editingPublicPath =
+    resolvedEditingSlug
+      ? `/boda/${encodeURIComponent(
+          resolvedEditingSlug
+        )}`
+      : '';
 
   const dateLabel =
     cleanText(previewDate) ||
@@ -948,11 +965,33 @@ export default function PreviewTab({
     }
   }
 
-  function handleCreate() {
-    if (
-      loading ||
-      typeof onCreateInvitation !==
+  function handlePrimaryAction() {
+    if (loading) {
+      return;
+    }
+
+    if (isEditing) {
+      if (
+        typeof onSaveChanges ===
         'function'
+      ) {
+        onSaveChanges();
+        return;
+      }
+
+      if (
+        typeof onCreateInvitation ===
+        'function'
+      ) {
+        onCreateInvitation();
+      }
+
+      return;
+    }
+
+    if (
+      typeof onCreateInvitation !==
+      'function'
     ) {
       return;
     }
@@ -1001,7 +1040,9 @@ export default function PreviewTab({
               textTransform: 'uppercase'
             }}
           >
-            Último paso
+            {isEditing
+              ? 'Revisión de cambios'
+              : 'Último paso'}
           </span>
 
           <h2
@@ -1016,7 +1057,9 @@ export default function PreviewTab({
               lineHeight: 1.1
             }}
           >
-            Revisión final
+            {isEditing
+              ? 'Revisar antes de guardar'
+              : 'Revisión final'}
           </h2>
 
           <p
@@ -1029,9 +1072,9 @@ export default function PreviewTab({
               lineHeight: 1.65
             }}
           >
-            Comprueba la información, el
-            diseño y las secciones antes de
-            publicar la invitación.
+            {isEditing
+              ? 'Comprueba los cambios antes de actualizar la invitación publicada. El enlace público se conservará.'
+              : 'Comprueba la información, el diseño y las secciones antes de publicar la invitación.'}
           </p>
         </div>
 
@@ -1082,6 +1125,108 @@ export default function PreviewTab({
           </button>
         </div>
       </header>
+
+      {isEditing && (
+        <section
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isNarrow
+              ? '1fr'
+              : '40px minmax(0, 1fr) auto',
+            alignItems: 'center',
+            gap: '12px',
+            border:
+              '1px solid color-mix(in srgb, var(--admin-accent) 30%, var(--admin-border))',
+            borderRadius: '15px',
+            padding: '13px 15px',
+            background:
+              'linear-gradient(135deg, color-mix(in srgb, var(--admin-accent) 7%, var(--admin-surface)), var(--admin-surface))'
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              display: 'grid',
+              width: '40px',
+              height: '40px',
+              placeItems: 'center',
+              border:
+                '1px solid color-mix(in srgb, var(--admin-accent) 35%, var(--admin-border))',
+              borderRadius: '12px',
+              background:
+                'color-mix(in srgb, var(--admin-accent) 9%, var(--admin-surface))',
+              color: getAdminAccent(),
+              fontSize: '16px'
+            }}
+          >
+            ✎
+          </span>
+
+          <div
+            style={{
+              minWidth: 0
+            }}
+          >
+            <span
+              style={{
+                display: 'block',
+                color: getAdminAccent(),
+                fontSize: '7px',
+                fontWeight: 900,
+                letterSpacing: '.13em',
+                textTransform: 'uppercase'
+              }}
+            >
+              Actualización de invitación
+            </span>
+
+            <strong
+              style={{
+                display: 'block',
+                marginTop: '4px',
+                color: getAdminText(),
+                fontSize: '10px',
+                fontWeight: 720
+              }}
+            >
+              {coupleName}
+            </strong>
+
+            <span
+              style={{
+                display: 'block',
+                marginTop: '3px',
+                overflowWrap: 'anywhere',
+                color: getAdminTextMuted(),
+                fontSize: '8px',
+                lineHeight: 1.5
+              }}
+            >
+              {editingPublicPath
+                ? `Se actualizará ${editingPublicPath} sin cambiar su enlace público.`
+                : 'Se actualizará la invitación existente sin crear una nueva.'}
+            </span>
+          </div>
+
+          <span
+            style={{
+              justifySelf: isNarrow
+                ? 'start'
+                : 'end',
+              border: `1px solid ${getAdminBorder()}`,
+              borderRadius: '999px',
+              padding: '5px 8px',
+              background: getAdminSurfaceSoft(),
+              color: getAdminTextSecondary(),
+              fontSize: '7px',
+              fontWeight: 800,
+              textTransform: 'uppercase'
+            }}
+          >
+            Mismo enlace
+          </span>
+        </section>
+      )}
 
       {/* ===================================================
           WORKSPACE
@@ -2576,7 +2721,9 @@ export default function PreviewTab({
               textTransform: 'uppercase'
             }}
           >
-            Antes de publicar
+            {isEditing
+              ? 'Antes de guardar'
+              : 'Antes de publicar'}
           </span>
 
           <strong
@@ -2586,8 +2733,11 @@ export default function PreviewTab({
               fontWeight: 650
             }}
           >
-            Revisa nombres, fecha y
-            ubicación.
+            {isEditing
+              ? editingPublicPath
+                ? `Los cambios se guardarán sobre ${editingPublicPath}.`
+                : 'Los cambios se guardarán sobre la invitación existente.'
+              : 'Revisa nombres, fecha y ubicación.'}
           </strong>
         </div>
 
@@ -2616,7 +2766,7 @@ export default function PreviewTab({
           <button
             type="button"
             style={primaryButtonStyle}
-            onClick={handleCreate}
+            onClick={handlePrimaryAction}
             disabled={loading}
           >
             {loading ? (
@@ -2625,15 +2775,19 @@ export default function PreviewTab({
                   ◷
                 </span>
 
-                Publicando...
+                {isEditing
+                  ? 'Guardando...'
+                  : 'Publicando...'}
               </>
             ) : (
               <>
                 <span aria-hidden="true">
-                  ↑
+                  {isEditing ? '✓' : '↑'}
                 </span>
 
-                Crear invitación
+                {isEditing
+                  ? 'Guardar cambios'
+                  : 'Crear invitación'}
               </>
             )}
           </button>

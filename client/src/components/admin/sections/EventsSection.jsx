@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 function cleanText(value) {
   if (typeof value !== 'string') {
@@ -60,11 +60,9 @@ function getDateTimestamp(event = {}) {
   const date = new Date(value);
   const timestamp = date.getTime();
 
-  if (Number.isNaN(timestamp)) {
-    return null;
-  }
-
-  return timestamp;
+  return Number.isNaN(timestamp)
+    ? null
+    : timestamp;
 }
 
 function getCreatedTimestamp(event = {}) {
@@ -103,29 +101,25 @@ function getStatusInformation(status) {
   if (status === 'upcoming') {
     return {
       label: 'Próximo evento',
-      icon: '◷',
-      color: 'var(--admin-success, #67c89b)',
+      color: 'var(--admin-success)',
       background:
-        'var(--admin-success-soft, rgba(69,160,117,.12))'
+        'color-mix(in srgb, var(--admin-success) 10%, transparent)'
     };
   }
 
   if (status === 'finished') {
     return {
       label: 'Evento finalizado',
-      icon: '✓',
-      color: 'var(--admin-text-muted, #707d90)',
-      background:
-        'var(--admin-surface-muted, #192332)'
+      color: 'var(--admin-text-muted)',
+      background: 'var(--admin-surface-muted)'
     };
   }
 
   return {
     label: 'Sin fecha',
-    icon: '○',
-    color: 'var(--admin-warning, #d8b65f)',
+    color: 'var(--admin-warning)',
     background:
-      'var(--admin-warning-soft, rgba(190,145,40,.11))'
+      'color-mix(in srgb, var(--admin-warning) 10%, transparent)'
   };
 }
 
@@ -141,7 +135,7 @@ function useMediaQuery(query) {
     return window.matchMedia(query).matches;
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (
       typeof window === 'undefined' ||
       typeof window.matchMedia !== 'function'
@@ -192,9 +186,7 @@ function Icon({
       width: size,
       height: size,
       minWidth: size,
-      maxWidth: size,
-      minHeight: size,
-      maxHeight: size
+      minHeight: size
     }
   };
 
@@ -221,11 +213,7 @@ function Icon({
   if (type === 'search') {
     return (
       <svg {...props}>
-        <circle
-          cx="11"
-          cy="11"
-          r="7"
-        />
+        <circle cx="11" cy="11" r="7" />
         <path d="m20 20-4-4" />
       </svg>
     );
@@ -241,6 +229,7 @@ function Icon({
           height="16"
           rx="2"
         />
+
         <path d="M8 3v4" />
         <path d="M16 3v4" />
         <path d="M3 10h18" />
@@ -252,6 +241,7 @@ function Icon({
     return (
       <svg {...props}>
         <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+
         <circle
           cx="12"
           cy="10"
@@ -265,6 +255,7 @@ function Icon({
     return (
       <svg {...props}>
         <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
+
         <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" />
       </svg>
     );
@@ -290,6 +281,7 @@ function Icon({
           height="11"
           rx="2"
         />
+
         <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
       </svg>
     );
@@ -303,6 +295,16 @@ function Icon({
         <path d="M7 7l1 13h8l1-13" />
         <path d="M10 11v5" />
         <path d="M14 11v5" />
+      </svg>
+    );
+  }
+
+  if (type === 'edit') {
+    return (
+      <svg {...props}>
+        <path d="M12 20h9" />
+
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
       </svg>
     );
   }
@@ -343,13 +345,10 @@ function Metric({
           width: '34px',
           height: '34px',
           placeItems: 'center',
-          border:
-            '1px solid var(--admin-border)',
+          border: '1px solid var(--admin-border)',
           borderRadius: '10px',
-          background:
-            'var(--admin-surface-soft)',
-          color:
-            'var(--admin-accent)',
+          background: 'var(--admin-surface-soft)',
+          color: 'var(--admin-accent)',
           fontSize: '14px'
         }}
       >
@@ -358,10 +357,7 @@ function Metric({
 
       <div
         style={{
-          display: 'flex',
-          minWidth: 0,
-          flexDirection: 'column',
-          gap: '2px'
+          minWidth: 0
         }}
       >
         <div
@@ -373,8 +369,7 @@ function Metric({
         >
           <strong
             style={{
-              color:
-                'var(--admin-text)',
+              color: 'var(--admin-text)',
               fontSize: '16px',
               fontWeight: 800,
               lineHeight: 1
@@ -385,8 +380,7 @@ function Metric({
 
           <span
             style={{
-              color:
-                'var(--admin-text-secondary)',
+              color: 'var(--admin-text-secondary)',
               fontSize: '9px',
               fontWeight: 700
             }}
@@ -397,8 +391,9 @@ function Metric({
 
         <small
           style={{
-            color:
-              'var(--admin-text-muted)',
+            display: 'block',
+            marginTop: '3px',
+            color: 'var(--admin-text-muted)',
             fontSize: '7px'
           }}
         >
@@ -416,31 +411,26 @@ function LoadingState() {
         display: 'grid',
         minHeight: '300px',
         placeItems: 'center',
-        border:
-          '1px solid var(--admin-border)',
+        border: '1px solid var(--admin-border)',
         borderRadius: '18px',
-        background:
-          'var(--admin-surface)'
+        background: 'var(--admin-surface)'
       }}
     >
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
+          display: 'grid',
+          justifyItems: 'center',
           gap: '12px',
-          color:
-            'var(--admin-text-secondary)'
+          color: 'var(--admin-text-secondary)'
         }}
       >
         <span
+          aria-hidden="true"
           style={{
             width: '32px',
             height: '32px',
-            border:
-              '3px solid var(--admin-border)',
-            borderTopColor:
-              'var(--admin-accent)',
+            border: '3px solid var(--admin-border)',
+            borderTopColor: 'var(--admin-accent)',
             borderRadius: '50%'
           }}
         />
@@ -473,8 +463,7 @@ function EmptyState({
           '1px dashed var(--admin-border-strong)',
         borderRadius: '18px',
         padding: '32px',
-        background:
-          'var(--admin-surface-soft)',
+        background: 'var(--admin-surface-soft)',
         textAlign: 'center'
       }}
     >
@@ -486,13 +475,10 @@ function EmptyState({
           height: '52px',
           marginBottom: '16px',
           placeItems: 'center',
-          border:
-            '1px solid var(--admin-border)',
+          border: '1px solid var(--admin-border)',
           borderRadius: '16px',
-          background:
-            'var(--admin-surface)',
-          color:
-            'var(--admin-accent)'
+          background: 'var(--admin-surface)',
+          color: 'var(--admin-accent)'
         }}
       >
         <Icon
@@ -504,8 +490,7 @@ function EmptyState({
       <h3
         style={{
           margin: 0,
-          color:
-            'var(--admin-text)',
+          color: 'var(--admin-text)',
           fontSize: '17px',
           fontWeight: 700
         }}
@@ -519,8 +504,7 @@ function EmptyState({
         style={{
           maxWidth: '420px',
           margin: '8px 0 0',
-          color:
-            'var(--admin-text-secondary)',
+          color: 'var(--admin-text-secondary)',
           fontSize: '9px',
           lineHeight: 1.65
         }}
@@ -540,17 +524,15 @@ function EmptyState({
               display: 'inline-flex',
               minHeight: '40px',
               alignItems: 'center',
-              justifyContent:
-                'center',
+              justifyContent: 'center',
               gap: '7px',
               marginTop: '18px',
               border:
                 '1px solid var(--admin-accent)',
               borderRadius: '11px',
               padding: '0 15px',
-              background:
-                'var(--admin-accent)',
-              color: '#0a111b',
+              background: 'var(--admin-accent)',
+              color: '#ffffff',
               fontSize: '9px',
               fontWeight: 800,
               cursor: 'pointer'
@@ -568,6 +550,76 @@ function EmptyState({
   );
 }
 
+function EventInformation({
+  icon,
+  label,
+  children
+}) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        minWidth: '185px',
+        gridTemplateColumns:
+          '30px minmax(0, 1fr)',
+        alignItems: 'center',
+        gap: '9px'
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          display: 'grid',
+          width: '30px',
+          height: '30px',
+          placeItems: 'center',
+          border: '1px solid var(--admin-border)',
+          borderRadius: '9px',
+          background: 'var(--admin-surface)',
+          color: 'var(--admin-accent)'
+        }}
+      >
+        <Icon
+          type={icon}
+          size={13}
+        />
+      </span>
+
+      <div
+        style={{
+          minWidth: 0
+        }}
+      >
+        <span
+          style={{
+            display: 'block',
+            marginBottom: '2px',
+            color: 'var(--admin-text-muted)',
+            fontSize: '7px',
+            textTransform: 'uppercase'
+          }}
+        >
+          {label}
+        </span>
+
+        <strong
+          style={{
+            display: 'block',
+            overflow: 'hidden',
+            color: 'var(--admin-text-secondary)',
+            fontSize: '9px',
+            fontWeight: 700,
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {children}
+        </strong>
+      </div>
+    </div>
+  );
+}
+
 export default function EventsSection({
   events = [],
   loadingEvents = false,
@@ -577,7 +629,8 @@ export default function EventsSection({
   copyWeddingUrl,
   getWeddingUrl,
   formatDate,
-  onCreateNew
+  onCreateNew,
+  onEditWedding
 }) {
   const isTablet = useMediaQuery(
     '(max-width: 980px)'
@@ -590,11 +643,15 @@ export default function EventsSection({
   const [search, setSearch] =
     useState('');
 
-  const [statusFilter, setStatusFilter] =
-    useState('all');
+  const [
+    statusFilter,
+    setStatusFilter
+  ] = useState('all');
 
-  const [sortOrder, setSortOrder] =
-    useState('recent');
+  const [
+    sortOrder,
+    setSortOrder
+  ] = useState('recent');
 
   const normalizedEvents =
     Array.isArray(events)
@@ -674,33 +731,41 @@ export default function EventsSection({
         }
       );
 
-    result.sort((first, second) => {
-      if (sortOrder === 'oldest') {
+    result.sort(
+      (first, second) => {
+        if (
+          sortOrder === 'oldest'
+        ) {
+          return (
+            getCreatedTimestamp(first) -
+            getCreatedTimestamp(second)
+          );
+        }
+
+        if (
+          sortOrder ===
+          'event-date'
+        ) {
+          const firstDate =
+            getDateTimestamp(first) ??
+            Number.MAX_SAFE_INTEGER;
+
+          const secondDate =
+            getDateTimestamp(second) ??
+            Number.MAX_SAFE_INTEGER;
+
+          return (
+            firstDate -
+            secondDate
+          );
+        }
+
         return (
-          getCreatedTimestamp(first) -
-          getCreatedTimestamp(second)
+          getCreatedTimestamp(second) -
+          getCreatedTimestamp(first)
         );
       }
-
-      if (
-        sortOrder === 'event-date'
-      ) {
-        const firstDate =
-          getDateTimestamp(first) ??
-          Number.MAX_SAFE_INTEGER;
-
-        const secondDate =
-          getDateTimestamp(second) ??
-          Number.MAX_SAFE_INTEGER;
-
-        return firstDate - secondDate;
-      }
-
-      return (
-        getCreatedTimestamp(second) -
-        getCreatedTimestamp(first)
-      );
-    });
+    );
 
     return result;
   }, [
@@ -730,27 +795,27 @@ export default function EventsSection({
           return resolvedUrl;
         }
       } catch {
-        // Fallback local debajo.
+        // Usamos el fallback local.
       }
     }
 
-    const slug = cleanText(
-      event?.slug
-    );
+    const slug =
+      cleanText(event?.slug);
 
     if (!slug) {
       return '';
     }
 
-    if (typeof window === 'undefined') {
+    if (
+      typeof window ===
+      'undefined'
+    ) {
       return `/boda/${encodeURIComponent(
         slug
       )}`;
     }
 
-    return `${
-      window.location.origin
-    }/boda/${encodeURIComponent(
+    return `${window.location.origin}/boda/${encodeURIComponent(
       slug
     )}`;
   }
@@ -777,14 +842,17 @@ export default function EventsSection({
           return result;
         }
       } catch {
-        // Fallback debajo.
+        // Usamos el fallback local.
       }
     }
 
-    const date = new Date(value);
+    const date =
+      new Date(value);
 
     if (
-      Number.isNaN(date.getTime())
+      Number.isNaN(
+        date.getTime()
+      )
     ) {
       return String(value);
     }
@@ -805,11 +873,13 @@ export default function EventsSection({
       'function'
     ) {
       try {
-        await copyWeddingUrl(event);
+        await copyWeddingUrl(
+          event
+        );
+
         return;
       } catch {
-        // Si el hook falla,
-        // usamos clipboard como respaldo.
+        // Intentamos copiar manualmente.
       }
     }
 
@@ -829,7 +899,8 @@ export default function EventsSection({
   }
 
   function handleRemove(event) {
-    const id = getEventId(event);
+    const id =
+      getEventId(event);
 
     if (
       !id ||
@@ -840,6 +911,18 @@ export default function EventsSection({
     }
 
     handleDelete(id);
+  }
+
+  function handleEdit(event) {
+    if (
+      !event ||
+      typeof onEditWedding !==
+        'function'
+    ) {
+      return;
+    }
+
+    onEditWedding(event);
   }
 
   const topButtonStyle = {
@@ -864,15 +947,35 @@ export default function EventsSection({
   const inputStyle = {
     width: '100%',
     minHeight: '42px',
+    boxSizing: 'border-box',
     border:
       '1px solid var(--admin-border)',
     borderRadius: '11px',
     outline: 0,
     background:
       'var(--admin-input)',
-    color:
-      'var(--admin-text)',
+    color: 'var(--admin-text)',
     fontSize: '9px'
+  };
+
+  const secondaryActionStyle = {
+    display: 'inline-flex',
+    minHeight: '36px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '7px',
+    border:
+      '1px solid var(--admin-border)',
+    borderRadius: '10px',
+    padding: '0 12px',
+    background:
+      'var(--admin-surface)',
+    color:
+      'var(--admin-text-secondary)',
+    fontSize: '8px',
+    fontWeight: 750,
+    textDecoration: 'none',
+    cursor: 'pointer'
   };
 
   return (
@@ -884,9 +987,11 @@ export default function EventsSection({
         gap: '22px'
       }}
     >
-      {/* =================================================
-          HEADER
-      ================================================== */}
+      {/*
+       * =====================================================
+       * HEADER
+       * =====================================================
+       */}
 
       <header
         style={{
@@ -928,8 +1033,7 @@ export default function EventsSection({
                 : '38px',
               fontWeight: 720,
               lineHeight: 1.05,
-              letterSpacing:
-                '-.045em'
+              letterSpacing: '-.045em'
             }}
           >
             Mis eventos
@@ -945,10 +1049,9 @@ export default function EventsSection({
               lineHeight: 1.65
             }}
           >
-            Consulta tus invitaciones,
-            revisa sus enlaces públicos y
-            administra cada evento desde un
-            solo lugar.
+            Abre, edita y administra tus
+            invitaciones publicadas sin
+            crear copias innecesarias.
           </p>
         </div>
 
@@ -965,7 +1068,9 @@ export default function EventsSection({
             onClick={() =>
               loadEvents?.()
             }
-            disabled={loadingEvents}
+            disabled={
+              loadingEvents
+            }
           >
             <Icon
               type="refresh"
@@ -985,8 +1090,8 @@ export default function EventsSection({
               borderColor:
                 'var(--admin-accent)',
               background:
-                'linear-gradient(135deg, var(--admin-accent-bright), var(--admin-accent))',
-              color: '#0a111b',
+                'var(--admin-accent)',
+              color: '#ffffff',
               fontWeight: 820
             }}
           >
@@ -1000,16 +1105,19 @@ export default function EventsSection({
         </div>
       </header>
 
-      {/* =================================================
-          MÉTRICAS
-      ================================================== */}
+      {/*
+       * =====================================================
+       * MÉTRICAS
+       * =====================================================
+       */}
 
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: isPhone
-            ? 'repeat(2, minmax(0, 1fr))'
-            : 'repeat(4, minmax(0, 1fr))',
+          gridTemplateColumns:
+            isPhone
+              ? 'repeat(2, minmax(0, 1fr))'
+              : 'repeat(4, minmax(0, 1fr))',
           overflow: 'hidden',
           border:
             '1px solid var(--admin-border)',
@@ -1027,36 +1135,45 @@ export default function EventsSection({
 
         <Metric
           icon="◷"
-          value={statistics.upcoming}
+          value={
+            statistics.upcoming
+          }
           label="Próximos"
           detail="eventos"
         />
 
         <Metric
           icon="✓"
-          value={statistics.finished}
+          value={
+            statistics.finished
+          }
           label="Finalizados"
           detail="eventos"
         />
 
         <Metric
           icon="○"
-          value={statistics.noDate}
+          value={
+            statistics.noDate
+          }
           label="Sin fecha"
           detail="eventos"
         />
       </div>
 
-      {/* =================================================
-          FILTROS
-      ================================================== */}
+      {/*
+       * =====================================================
+       * FILTROS
+       * =====================================================
+       */}
 
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: isTablet
-            ? '1fr'
-            : 'minmax(260px, 1fr) 170px 190px',
+          gridTemplateColumns:
+            isTablet
+              ? '1fr'
+              : 'minmax(260px, 1fr) 170px 190px',
           gap: '11px',
           border:
             '1px solid var(--admin-border)',
@@ -1089,6 +1206,7 @@ export default function EventsSection({
             }}
           >
             <span
+              aria-hidden="true"
               style={{
                 position: 'absolute',
                 top: '50%',
@@ -1215,16 +1333,20 @@ export default function EventsSection({
         </label>
       </section>
 
-      {/* =================================================
-          CONTENIDO
-      ================================================== */}
+      {/*
+       * =====================================================
+       * EVENTOS
+       * =====================================================
+       */}
 
       {loadingEvents ? (
         <LoadingState />
       ) : normalizedEvents.length ===
         0 ? (
         <EmptyState
-          onCreateNew={onCreateNew}
+          onCreateNew={
+            onCreateNew
+          }
         />
       ) : visibleEvents.length ===
         0 ? (
@@ -1259,7 +1381,9 @@ export default function EventsSection({
                 getAddress(event);
 
               const url =
-                resolveWeddingUrl(event);
+                resolveWeddingUrl(
+                  event
+                );
 
               const deleting =
                 Boolean(
@@ -1267,7 +1391,9 @@ export default function EventsSection({
                     String(
                       deletingEventId
                     ) ===
-                      String(eventId)
+                      String(
+                        eventId
+                      )
                 );
 
               return (
@@ -1307,6 +1433,12 @@ export default function EventsSection({
                     }}
                   />
 
+                  {/*
+                   * =========================================
+                   * INFORMACIÓN
+                   * =========================================
+                   */}
+
                   <div
                     style={{
                       position:
@@ -1330,8 +1462,6 @@ export default function EventsSection({
                           : '22px 23px'
                     }}
                   >
-                    {/* LEFT */}
-
                     <div
                       style={{
                         minWidth: 0,
@@ -1359,7 +1489,6 @@ export default function EventsSection({
                               '25px',
                             alignItems:
                               'center',
-                            gap: '6px',
                             borderRadius:
                               '999px',
                             padding:
@@ -1374,14 +1503,6 @@ export default function EventsSection({
                               800
                           }}
                         >
-                          <span
-                            aria-hidden="true"
-                          >
-                            {
-                              statusInformation.icon
-                            }
-                          </span>
-
                           {
                             statusInformation.label
                           }
@@ -1435,181 +1556,27 @@ export default function EventsSection({
                             '16px'
                         }}
                       >
-                        <div
-                          style={{
-                            display:
-                              'grid',
-                            gridTemplateColumns:
-                              '30px minmax(0,1fr)',
-                            alignItems:
-                              'center',
-                            gap: '9px',
-                            minWidth:
-                              '185px'
-                          }}
+                        <EventInformation
+                          icon="calendar"
+                          label="Fecha"
                         >
-                          <span
-                            style={{
-                              display:
-                                'grid',
-                              width:
-                                '30px',
-                              height:
-                                '30px',
-                              placeItems:
-                                'center',
-                              border:
-                                '1px solid var(--admin-border)',
-                              borderRadius:
-                                '9px',
-                              background:
-                                'var(--admin-surface)',
-                              color:
-                                'var(--admin-accent)'
-                            }}
-                          >
-                            <Icon
-                              type="calendar"
-                              size={
-                                13
-                              }
-                            />
-                          </span>
-
-                          <div
-                            style={{
-                              display:
-                                'flex',
-                              flexDirection:
-                                'column',
-                              gap:
-                                '2px'
-                            }}
-                          >
-                            <span
-                              style={{
-                                color:
-                                  'var(--admin-text-muted)',
-                                fontSize:
-                                  '7px',
-                                textTransform:
-                                  'uppercase'
-                              }}
-                            >
-                              Fecha
-                            </span>
-
-                            <strong
-                              style={{
-                                color:
-                                  'var(--admin-text-secondary)',
-                                fontSize:
-                                  '9px',
-                                fontWeight:
-                                  700
-                              }}
-                            >
-                              {formatWeddingDate(
-                                event
-                              )}
-                            </strong>
-                          </div>
-                        </div>
+                          {formatWeddingDate(
+                            event
+                          )}
+                        </EventInformation>
 
                         {(location ||
                           address) && (
-                          <div
-                            style={{
-                              display:
-                                'grid',
-                              gridTemplateColumns:
-                                '30px minmax(0,1fr)',
-                              alignItems:
-                                'center',
-                              gap: '9px',
-                              minWidth:
-                                '185px'
-                            }}
+                          <EventInformation
+                            icon="location"
+                            label="Lugar"
                           >
-                            <span
-                              style={{
-                                display:
-                                  'grid',
-                                width:
-                                  '30px',
-                                height:
-                                  '30px',
-                                placeItems:
-                                  'center',
-                                border:
-                                  '1px solid var(--admin-border)',
-                                borderRadius:
-                                  '9px',
-                                background:
-                                  'var(--admin-surface)',
-                                color:
-                                  'var(--admin-accent)'
-                              }}
-                            >
-                              <Icon
-                                type="location"
-                                size={
-                                  13
-                                }
-                              />
-                            </span>
-
-                            <div
-                              style={{
-                                display:
-                                  'flex',
-                                minWidth:
-                                  0,
-                                flexDirection:
-                                  'column',
-                                gap:
-                                  '2px'
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color:
-                                    'var(--admin-text-muted)',
-                                  fontSize:
-                                    '7px',
-                                  textTransform:
-                                    'uppercase'
-                                }}
-                              >
-                                Lugar
-                              </span>
-
-                              <strong
-                                style={{
-                                  overflow:
-                                    'hidden',
-                                  color:
-                                    'var(--admin-text-secondary)',
-                                  fontSize:
-                                    '9px',
-                                  fontWeight:
-                                    700,
-                                  textOverflow:
-                                    'ellipsis',
-                                  whiteSpace:
-                                    'nowrap'
-                                }}
-                              >
-                                {location ||
-                                  address}
-                              </strong>
-                            </div>
-                          </div>
+                            {location ||
+                              address}
+                          </EventInformation>
                         )}
                       </div>
                     </div>
-
-                    {/* ID */}
 
                     <div
                       style={{
@@ -1680,7 +1647,11 @@ export default function EventsSection({
                     </div>
                   </div>
 
-                  {/* URL */}
+                  {/*
+                   * =========================================
+                   * URL
+                   * =========================================
+                   */}
 
                   {url && (
                     <div
@@ -1708,16 +1679,14 @@ export default function EventsSection({
                       }}
                     >
                       <span
+                        aria-hidden="true"
                         style={{
                           display:
                             'grid',
                           width: '30px',
-                          height:
-                            '30px',
+                          height: '30px',
                           placeItems:
                             'center',
-                          borderRadius:
-                            '9px',
                           color:
                             'var(--admin-accent)'
                         }}
@@ -1751,6 +1720,7 @@ export default function EventsSection({
                         </span>
 
                         <strong
+                          title={url}
                           style={{
                             display:
                               'block',
@@ -1780,31 +1750,9 @@ export default function EventsSection({
                           )
                         }
                         style={{
-                          display:
-                            'inline-flex',
+                          ...secondaryActionStyle,
                           minHeight:
-                            '31px',
-                          alignItems:
-                            'center',
-                          justifyContent:
-                            'center',
-                          gap: '6px',
-                          border:
-                            '1px solid var(--admin-border)',
-                          borderRadius:
-                            '9px',
-                          padding:
-                            '0 10px',
-                          background:
-                            'var(--admin-surface)',
-                          color:
-                            'var(--admin-text-secondary)',
-                          fontSize:
-                            '8px',
-                          fontWeight:
-                            720,
-                          cursor:
-                            'pointer'
+                            '31px'
                         }}
                       >
                         <Icon
@@ -1817,7 +1765,11 @@ export default function EventsSection({
                     </div>
                   )}
 
-                  {/* ACTIONS */}
+                  {/*
+                   * =========================================
+                   * ACCIONES
+                   * =========================================
+                   */}
 
                   <footer
                     style={{
@@ -1831,22 +1783,43 @@ export default function EventsSection({
                         'center',
                       justifyContent:
                         'space-between',
-                      gap: '10px',
+                      gap: '12px',
                       padding:
-                        '13px 23px'
+                        '14px 23px'
                     }}
                   >
-                    <span
-                      style={{
-                        color:
-                          'var(--admin-text-muted)',
-                        fontSize:
-                          '7px'
-                      }}
-                    >
-                      Gestiona esta invitación
-                      sin salir del panel.
-                    </span>
+                    <div>
+                      <strong
+                        style={{
+                          display:
+                            'block',
+                          color:
+                            'var(--admin-text)',
+                          fontSize:
+                            '8px',
+                          fontWeight:
+                            780
+                        }}
+                      >
+                        Gestiona esta invitación
+                      </strong>
+
+                      <span
+                        style={{
+                          display:
+                            'block',
+                          marginTop:
+                            '3px',
+                          color:
+                            'var(--admin-text-muted)',
+                          fontSize:
+                            '7px'
+                        }}
+                      >
+                        Los cambios mantendrán
+                        el mismo enlace público.
+                      </span>
+                    </div>
 
                     <div
                       style={{
@@ -1854,58 +1827,20 @@ export default function EventsSection({
                           'flex',
                         flexWrap:
                           'wrap',
-                        gap:
-                          '7px'
+                        gap: '7px'
                       }}
                     >
-                      {url && (
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display:
-                              'inline-flex',
-                            minHeight:
-                              '36px',
-                            alignItems:
-                              'center',
-                            justifyContent:
-                              'center',
-                            gap: '7px',
-                            border:
-                              '1px solid var(--admin-accent)',
-                            borderRadius:
-                              '10px',
-                            padding:
-                              '0 12px',
-                            background:
-                              'linear-gradient(135deg, var(--admin-accent-bright), var(--admin-accent))',
-                            color:
-                              '#0a111b',
-                            fontSize:
-                              '8px',
-                            fontWeight:
-                              800,
-                            textDecoration:
-                              'none'
-                          }}
-                        >
-                          <Icon
-                            type="external"
-                            size={
-                              12
-                            }
-                          />
-
-                          Abrir invitación
-                        </a>
-                      )}
+                      {/*
+                       * EDITAR
+                       */}
 
                       <button
                         type="button"
+                        disabled={
+                          deleting
+                        }
                         onClick={() =>
-                          handleCopy(
+                          handleEdit(
                             event
                           )
                         }
@@ -1920,63 +1855,106 @@ export default function EventsSection({
                             'center',
                           gap: '7px',
                           border:
-                            '1px solid var(--admin-border)',
+                            '1px solid var(--admin-accent)',
                           borderRadius:
                             '10px',
                           padding:
-                            '0 12px',
+                            '0 13px',
                           background:
-                            'var(--admin-surface)',
+                            'var(--admin-accent)',
                           color:
-                            'var(--admin-text-secondary)',
+                            '#ffffff',
                           fontSize:
                             '8px',
                           fontWeight:
-                            750,
+                            820,
                           cursor:
-                            'pointer'
+                            deleting
+                              ? 'not-allowed'
+                              : 'pointer',
+                          opacity:
+                            deleting
+                              ? 0.5
+                              : 1
                         }}
                       >
                         <Icon
-                          type="copy"
+                          type="edit"
                           size={12}
                         />
 
-                        Copiar enlace
+                        Editar invitación
                       </button>
+
+                      {/*
+                       * ABRIR
+                       */}
+
+                      {url && (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={
+                            secondaryActionStyle
+                          }
+                        >
+                          <Icon
+                            type="external"
+                            size={12}
+                          />
+
+                          Abrir
+                        </a>
+                      )}
+
+                      {/*
+                       * COPIAR
+                       */}
+
+                      {url && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopy(
+                              event
+                            )
+                          }
+                          style={
+                            secondaryActionStyle
+                          }
+                        >
+                          <Icon
+                            type="copy"
+                            size={12}
+                          />
+
+                          Copiar enlace
+                        </button>
+                      )}
+
+                      {/*
+                       * ELIMINAR
+                       */}
 
                       <button
                         type="button"
-                        disabled={deleting}
+                        disabled={
+                          deleting
+                        }
                         onClick={() =>
                           handleRemove(
                             event
                           )
                         }
                         style={{
-                          display:
-                            'inline-flex',
-                          minHeight:
-                            '36px',
-                          alignItems:
-                            'center',
-                          justifyContent:
-                            'center',
-                          gap: '7px',
+                          ...secondaryActionStyle,
                           border:
                             '1px solid color-mix(in srgb, var(--admin-danger) 25%, var(--admin-border))',
-                          borderRadius:
-                            '10px',
-                          padding:
-                            '0 12px',
                           background:
                             'transparent',
                           color:
                             'var(--admin-danger)',
-                          fontSize:
-                            '8px',
-                          fontWeight:
-                            750,
                           cursor:
                             deleting
                               ? 'not-allowed'

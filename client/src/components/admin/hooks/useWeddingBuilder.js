@@ -1,11 +1,13 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState
 } from 'react';
 
 import {
+  updateWedding,
   uploadWeddingMedia
 } from '../../../services/weddingService';
 
@@ -35,11 +37,16 @@ function canUseWindow() {
   return typeof window !== 'undefined';
 }
 
+function cleanText(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+}
+
 function buildPublicWeddingUrl(wedding) {
-  if (
-    !canUseWindow() ||
-    !wedding?.slug
-  ) {
+  if (!canUseWindow() || !wedding?.slug) {
     return '';
   }
 
@@ -48,14 +55,836 @@ function buildPublicWeddingUrl(wedding) {
   )}`;
 }
 
+/*
+ * =========================================================
+ * MULTIMEDIA GUARDADA
+ * =========================================================
+ */
+
+function getStoredFileName(url, fallbackName) {
+  const cleanUrl = cleanText(url);
+
+  if (!cleanUrl) {
+    return fallbackName;
+  }
+
+  try {
+    const urlWithoutQuery =
+      cleanUrl.split('?')[0];
+
+    const lastSegment =
+      urlWithoutQuery
+        .split('/')
+        .filter(Boolean)
+        .pop();
+
+    if (!lastSegment) {
+      return fallbackName;
+    }
+
+    return decodeURIComponent(lastSegment);
+  } catch {
+    return fallbackName;
+  }
+}
+
+function createStoredMediaItem(
+  url,
+  type,
+  index = 0
+) {
+  const cleanUrl = cleanText(url);
+
+  if (!cleanUrl) {
+    return null;
+  }
+
+  const isAudio = type === 'audio';
+
+  const fallbackName = isAudio
+    ? 'Canción guardada'
+    : index > 0
+      ? `Fotografía ${index}`
+      : 'Imagen guardada';
+
+  return {
+    id: `stored-${type}-${index}-${cleanUrl}`,
+    file: null,
+    name: getStoredFileName(
+      cleanUrl,
+      fallbackName
+    ),
+    type: isAudio
+      ? 'audio'
+      : 'image',
+    size: 0,
+    formattedSize: 'Guardado',
+    previewUrl: cleanUrl,
+    url: cleanUrl
+  };
+}
+
+function hydrateWeddingMedia(media = {}) {
+  const source =
+    media &&
+    typeof media === 'object' &&
+    !Array.isArray(media)
+      ? media
+      : {};
+
+  const musicUrl = cleanText(
+    source.musicUrl ||
+      source.backgroundMusic ||
+      source.music
+  );
+
+  const gallery = Array.isArray(
+    source.gallery
+  )
+    ? source.gallery
+        .map((item, index) => {
+          const url =
+            typeof item === 'string'
+              ? item
+              : item?.url ||
+                item?.path ||
+                item?.src ||
+                '';
+
+          return createStoredMediaItem(
+            url,
+            'gallery',
+            index + 1
+          );
+        })
+        .filter(Boolean)
+    : [];
+
+  return {
+    coverImage: createStoredMediaItem(
+      source.coverImage ||
+        source.coverImageUrl ||
+        '',
+      'cover',
+      0
+    ),
+
+    coupleImage: createStoredMediaItem(
+      source.coupleImage ||
+        source.coupleImageUrl ||
+        '',
+      'couple',
+      0
+    ),
+
+    backgroundMusic:
+      createStoredMediaItem(
+        musicUrl,
+        'audio',
+        0
+      ),
+
+    gallery
+  };
+}
+
+function getPersistentMediaUrl(mediaItem) {
+  if (!mediaItem) {
+    return '';
+  }
+
+  if (typeof mediaItem === 'string') {
+    return cleanText(mediaItem);
+  }
+
+  if (
+    typeof mediaItem !== 'object'
+  ) {
+    return '';
+  }
+
+  /*
+   * No usamos previewUrl porque los archivos nuevos
+   * normalmente tienen una URL blob temporal.
+   */
+
+  return cleanText(
+    mediaItem.url ||
+      mediaItem.secureUrl ||
+      mediaItem.secure_url ||
+      mediaItem.fileUrl ||
+      mediaItem.path ||
+      mediaItem.src ||
+      ''
+  );
+}
+
+function hasMediaFile(mediaItem) {
+  if (!mediaItem) {
+    return false;
+  }
+
+  if (
+    typeof File !== 'undefined' &&
+    mediaItem instanceof File
+  ) {
+    return true;
+  }
+
+  if (
+    typeof Blob !== 'undefined' &&
+    mediaItem instanceof Blob
+  ) {
+    return true;
+  }
+
+  if (
+    typeof File !== 'undefined' &&
+    mediaItem.file instanceof File
+  ) {
+    return true;
+  }
+
+  if (
+    typeof Blob !== 'undefined' &&
+    mediaItem.file instanceof Blob
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/*
+ * =========================================================
+ * ORDEN DE GALERÍA AL EDITAR
+ * =========================================================
+ */
+
+function buildOrderedGallery(
+  currentGallery,
+  uploadedGallery
+) {
+  const gallery =
+    Array.isArray(currentGallery)
+      ? currentGallery
+      : [];
+
+  const uploadedUrls =
+    Array.isArray(uploadedGallery)
+      ? uploadedGallery
+          .map((item) =>
+            typeof item === 'string'
+              ? cleanText(item)
+              : getPersistentMediaUrl(item)
+          )
+          .filter(Boolean)
+      : [];
+
+  const existingUrls = gallery
+    .map((item) =>
+      getPersistentMediaUrl(item)
+    )
+    .filter(Boolean);
+
+  const newFileCount = gallery.filter(
+    (item) =>
+      hasMediaFile(item)
+  ).length;
+
+  let freshUploadedUrls =
+    uploadedUrls;
+
+  if (
+    newFileCount > 0 &&
+    uploadedUrls.length >
+      newFileCount
+  ) {
+    freshUploadedUrls =
+      uploadedUrls
+        .filter(
+          (url) =>
+            !existingUrls.includes(url)
+        )
+        .slice(0, newFileCount);
+  }
+
+  let uploadedIndex = 0;
+
+  return gallery
+    .map((item) => {
+      const existingUrl =
+        getPersistentMediaUrl(item);
+
+      if (existingUrl) {
+        return existingUrl;
+      }
+
+      if (hasMediaFile(item)) {
+        const uploadedUrl =
+          freshUploadedUrls[
+            uploadedIndex
+          ];
+
+        uploadedIndex += 1;
+
+        return uploadedUrl || '';
+      }
+
+      return '';
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+/*
+ * =========================================================
+ * BORRADOR LOCAL / AUTOGUARDADO
+ * =========================================================
+ *
+ * Este borrador vive únicamente en localStorage.
+ *
+ * NO publica.
+ * NO actualiza MongoDB.
+ * NO cambia el slug.
+ * NO genera otra URL.
+ */
+
+const WEDDING_DRAFT_STORAGE_KEY =
+  'bodasync:wedding-builder:draft:v1';
+
+const WEDDING_DRAFT_VERSION = 1;
+
+const WEDDING_DRAFT_AUTOSAVE_DELAY =
+  1200;
+
+const ALLOWED_DRAFT_TABS = [
+  'general',
+  'content',
+  'sections',
+  'itinerary',
+  'media',
+  'design',
+  'preview'
+];
+
+function getDraftStorage() {
+  if (!canUseWindow()) {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredWeddingDraft() {
+  const storage = getDraftStorage();
+
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const rawDraft =
+      storage.getItem(
+        WEDDING_DRAFT_STORAGE_KEY
+      );
+
+    if (!rawDraft) {
+      return null;
+    }
+
+    const parsedDraft =
+      JSON.parse(rawDraft);
+
+    if (
+      !parsedDraft ||
+      typeof parsedDraft !==
+        'object' ||
+      parsedDraft.version !==
+        WEDDING_DRAFT_VERSION ||
+      !parsedDraft.formData ||
+      typeof parsedDraft.formData !==
+        'object'
+    ) {
+      storage.removeItem(
+        WEDDING_DRAFT_STORAGE_KEY
+      );
+
+      return null;
+    }
+
+    return parsedDraft;
+  } catch {
+    return null;
+  }
+}
+
+function removeStoredWeddingDraft() {
+  const storage = getDraftStorage();
+
+  if (!storage) {
+    return false;
+  }
+
+  try {
+    storage.removeItem(
+      WEDDING_DRAFT_STORAGE_KEY
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getDraftMediaUrl(mediaItem) {
+  return getPersistentMediaUrl(
+    mediaItem
+  );
+}
+
+function serializeMediaForDraft(
+  media = {}
+) {
+  const source =
+    media &&
+    typeof media === 'object' &&
+    !Array.isArray(media)
+      ? media
+      : {};
+
+  const gallery =
+    Array.isArray(source.gallery)
+      ? source.gallery
+      : [];
+
+  const coverImage =
+    getDraftMediaUrl(
+      source.coverImage
+    );
+
+  const coupleImage =
+    getDraftMediaUrl(
+      source.coupleImage
+    );
+
+  const backgroundMusic =
+    getDraftMediaUrl(
+      source.backgroundMusic ||
+        source.musicUrl ||
+        source.music
+    );
+
+  const galleryUrls =
+    gallery
+      .map((item) =>
+        getDraftMediaUrl(item)
+      )
+      .filter(Boolean)
+      .slice(0, 8);
+
+  /*
+   * Los archivos locales File/Blob no pueden
+   * sobrevivir a una recarga mediante localStorage.
+   */
+
+  const hasUnrestorableFiles =
+    hasMediaFile(
+      source.coverImage
+    ) ||
+    hasMediaFile(
+      source.coupleImage
+    ) ||
+    hasMediaFile(
+      source.backgroundMusic ||
+        source.musicUrl ||
+        source.music
+    ) ||
+    gallery.some((item) =>
+      hasMediaFile(item)
+    );
+
+  return {
+    media: {
+      coverImage,
+      coupleImage,
+      backgroundMusic,
+      musicUrl:
+        backgroundMusic,
+      gallery:
+        galleryUrls
+    },
+
+    hasUnrestorableFiles
+  };
+}
+
+function getDraftEditingWedding(
+  editingWedding
+) {
+  if (
+    !editingWedding ||
+    typeof editingWedding !==
+      'object'
+  ) {
+    return null;
+  }
+
+  const weddingId =
+    cleanText(
+      String(
+        editingWedding._id ||
+          editingWedding.id ||
+          ''
+      )
+    );
+
+  if (!weddingId) {
+    return null;
+  }
+
+  return {
+    _id: weddingId,
+
+    id:
+      cleanText(
+        String(
+          editingWedding.id ||
+            ''
+        )
+      ),
+
+    slug:
+      cleanText(
+        editingWedding.slug
+      ),
+
+    groomName:
+      cleanText(
+        editingWedding.groomName
+      ),
+
+    brideName:
+      cleanText(
+        editingWedding.brideName
+      ),
+
+    updatedAt:
+      editingWedding.updatedAt ||
+      null
+  };
+}
+
+function buildWeddingDraftSnapshot({
+  formData,
+  media,
+  formTab,
+  editingWedding
+}) {
+  const serializedMedia =
+    serializeMediaForDraft(
+      media
+    );
+
+  const editingContext =
+    getDraftEditingWedding(
+      editingWedding
+    );
+
+  return {
+    version:
+      WEDDING_DRAFT_VERSION,
+
+    savedAt:
+      new Date().toISOString(),
+
+    mode:
+      editingContext
+        ? 'editing'
+        : 'creating',
+
+    formTab:
+      ALLOWED_DRAFT_TABS.includes(
+        formTab
+      )
+        ? formTab
+        : 'general',
+
+    formData:
+      formData &&
+      typeof formData ===
+        'object'
+        ? formData
+        : {},
+
+    media:
+      serializedMedia.media,
+
+    editingWedding:
+      editingContext,
+
+    hasUnrestorableFiles:
+      serializedMedia
+        .hasUnrestorableFiles
+  };
+}
+
+function getWeddingDraftFingerprint(
+  draft
+) {
+  if (
+    !draft ||
+    typeof draft !== 'object'
+  ) {
+    return '';
+  }
+
+  try {
+    return JSON.stringify({
+      mode: draft.mode,
+
+      formTab:
+        draft.formTab,
+
+      formData:
+        draft.formData,
+
+      media:
+        draft.media,
+
+      editingWedding:
+        draft.editingWedding
+          ? {
+              _id:
+                draft
+                  .editingWedding
+                  ._id,
+
+              slug:
+                draft
+                  .editingWedding
+                  .slug
+            }
+          : null,
+
+      hasUnrestorableFiles:
+        Boolean(
+          draft
+            .hasUnrestorableFiles
+        )
+    });
+  } catch {
+    return '';
+  }
+}
+
+function hasMeaningfulWeddingDraft(
+  draft
+) {
+  if (
+    !draft ||
+    typeof draft !== 'object'
+  ) {
+    return false;
+  }
+
+  /*
+   * Si estamos editando una boda publicada,
+   * cualquier cambio puede ser importante.
+   */
+
+  if (draft.mode === 'editing') {
+    return Boolean(
+      draft.editingWedding?._id
+    );
+  }
+
+  const formData =
+    draft.formData &&
+    typeof draft.formData ===
+      'object'
+      ? draft.formData
+      : {};
+
+  const media =
+    draft.media &&
+    typeof draft.media ===
+      'object'
+      ? draft.media
+      : {};
+
+  const location =
+    formData.location &&
+    typeof formData.location ===
+      'object'
+      ? formData.location
+      : {};
+
+  const story =
+    formData.story &&
+    typeof formData.story ===
+      'object'
+      ? formData.story
+      : {};
+
+  const parents =
+    formData.parents &&
+    typeof formData.parents ===
+      'object'
+      ? formData.parents
+      : {};
+
+  const dressCode =
+    formData.dressCode &&
+    typeof formData.dressCode ===
+      'object'
+      ? formData.dressCode
+      : {};
+
+  const gifts =
+    formData.gifts &&
+    typeof formData.gifts ===
+      'object'
+      ? formData.gifts
+      : {};
+
+  const itinerary =
+    Array.isArray(
+      formData.itinerary
+    )
+      ? formData.itinerary
+      : [];
+
+  const gallery =
+    Array.isArray(media.gallery)
+      ? media.gallery
+      : [];
+
+  const hasCoreInformation =
+    Boolean(
+      cleanText(
+        formData.groomName
+      ) ||
+        cleanText(
+          formData.brideName
+        ) ||
+        cleanText(
+          formData.eventDate
+        )
+    );
+
+  const hasContent =
+    Boolean(
+      Object.values({
+        ...location,
+        ...story,
+        ...parents,
+        ...dressCode,
+        ...gifts
+      }).some((value) =>
+        typeof value === 'string'
+          ? Boolean(
+              cleanText(value)
+            )
+          : Boolean(value)
+      )
+    );
+
+  const hasItinerary =
+    itinerary.some((item) => {
+      if (
+        !item ||
+        typeof item !== 'object'
+      ) {
+        return false;
+      }
+
+      return Object.values(
+        item
+      ).some((value) =>
+        typeof value === 'string'
+          ? Boolean(
+              cleanText(value)
+            )
+          : Boolean(value)
+      );
+    });
+
+  const hasMedia =
+    Boolean(
+      cleanText(
+        media.coverImage
+      ) ||
+        cleanText(
+          media.coupleImage
+        ) ||
+        cleanText(
+          media.backgroundMusic
+        ) ||
+        gallery.length
+    );
+
+  const hasUnrestorableFiles =
+    Boolean(
+      draft.hasUnrestorableFiles
+    );
+
+  return Boolean(
+    hasCoreInformation ||
+      hasContent ||
+      hasItinerary ||
+      hasMedia ||
+      hasUnrestorableFiles
+  );
+}
+
+function writeStoredWeddingDraft(
+  draft
+) {
+  const storage = getDraftStorage();
+
+  if (
+    !storage ||
+    !hasMeaningfulWeddingDraft(
+      draft
+    )
+  ) {
+    return false;
+  }
+
+  try {
+    storage.setItem(
+      WEDDING_DRAFT_STORAGE_KEY,
+      JSON.stringify(draft)
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function useWeddingBuilder() {
   /*
-   * Tomamos los ajustes guardados antes de
-   * crear el formulario inicial.
+   * =====================================================
+   * AJUSTES INICIALES
+   * =====================================================
    */
-  const initialSettingsRef = useRef(
-    getInitialAdminSettings()
-  );
+
+  const initialSettingsRef =
+    useRef(
+      getInitialAdminSettings()
+    );
+
+  /*
+   * =====================================================
+   * NAVEGACIÓN
+   * =====================================================
+   */
 
   const [
     activeSection,
@@ -67,6 +896,12 @@ export default function useWeddingBuilder() {
     setFormTab
   ] = useState('general');
 
+  /*
+   * =====================================================
+   * MENSAJES
+   * =====================================================
+   */
+
   const [
     error,
     setError
@@ -77,16 +912,108 @@ export default function useWeddingBuilder() {
     setSuccessMessage
   ] = useState('');
 
+  /*
+   * =====================================================
+   * ENVÍO
+   * =====================================================
+   */
+
   const [
     submitting,
     setSubmitting
   ] = useState(false);
 
-  /*
-   * Evita envíos dobles incluso si React todavía
-   * no ha actualizado submitting.
-   */
   const submittingRef =
+    useRef(false);
+
+  /*
+   * =====================================================
+   * MODO EDICIÓN
+   * =====================================================
+   */
+
+  const [
+    editingWedding,
+    setEditingWedding
+  ] = useState(null);
+
+  const editingWeddingId =
+    cleanText(
+      String(
+        editingWedding?._id ||
+          editingWedding?.id ||
+          ''
+      )
+    );
+
+  const isEditing =
+    Boolean(editingWeddingId);
+
+  /*
+   * =====================================================
+   * BORRADOR LOCAL
+   * =====================================================
+   */
+
+  const initialDraftRef =
+    useRef(
+      readStoredWeddingDraft()
+    );
+
+  const [
+    recoverableDraft,
+    setRecoverableDraft
+  ] = useState(
+    initialDraftRef.current
+  );
+
+  const [
+    hasLocalDraft,
+    setHasLocalDraft
+  ] = useState(
+    Boolean(
+      initialDraftRef.current
+    )
+  );
+
+  const [
+    draftSavedAt,
+    setDraftSavedAt
+  ] = useState(
+    initialDraftRef.current
+      ?.savedAt ||
+      ''
+  );
+
+  const [
+    draftStatus,
+    setDraftStatus
+  ] = useState(
+    initialDraftRef.current
+      ? 'available'
+      : 'idle'
+  );
+
+  const [
+    draftHasUnrestorableFiles,
+    setDraftHasUnrestorableFiles
+  ] = useState(
+    Boolean(
+      initialDraftRef.current
+        ?.hasUnrestorableFiles
+    )
+  );
+
+  const autosaveTimerRef =
+    useRef(null);
+
+  const latestDraftRef =
+    useRef(null);
+
+  const draftBaselineFingerprintRef =
+    useRef(null);
+
+  const autosavePausedRef =
     useRef(false);
 
   /*
@@ -94,16 +1021,13 @@ export default function useWeddingBuilder() {
    * FORMULARIO
    * =====================================================
    */
+
   const weddingForm =
     useWeddingForm(
-      initialSettingsRef.current.defaultMessage
+      initialSettingsRef.current
+        .defaultMessage
     );
 
-  /*
-   * Cuando se guarda un nuevo mensaje predeterminado,
-   * solo lo aplicamos al formulario actual si todavía
-   * no existe un mensaje.
-   */
   const handleDefaultMessageSaved =
     useCallback(
       (defaultMessage) => {
@@ -112,7 +1036,8 @@ export default function useWeddingBuilder() {
             ...currentForm,
 
             welcomeMessage:
-              currentForm.welcomeMessage ||
+              currentForm
+                .welcomeMessage ||
               defaultMessage
           })
         );
@@ -127,10 +1052,12 @@ export default function useWeddingBuilder() {
    * AJUSTES
    * =====================================================
    */
+
   const adminSettings =
     useAdminSettings({
       setError,
       setSuccessMessage,
+
       onDefaultMessageSaved:
         handleDefaultMessageSaved
     });
@@ -140,6 +1067,7 @@ export default function useWeddingBuilder() {
    * ITINERARIO
    * =====================================================
    */
+
   const itinerary =
     useItinerary({
       formData:
@@ -154,6 +1082,7 @@ export default function useWeddingBuilder() {
    * MULTIMEDIA
    * =====================================================
    */
+
   const weddingMedia =
     useWeddingMedia({
       setError,
@@ -165,6 +1094,7 @@ export default function useWeddingBuilder() {
    * EVENTOS
    * =====================================================
    */
+
   const weddingEvents =
     useWeddingEvents({
       setError,
@@ -177,15 +1107,18 @@ export default function useWeddingBuilder() {
    * DATOS CALCULADOS
    * =====================================================
    */
+
   const previewDate =
     useMemo(
       () =>
         formatPreviewDate(
-          weddingForm.formData
+          weddingForm
+            .formData
             .eventDate
         ),
       [
-        weddingForm.formData
+        weddingForm
+          .formData
           .eventDate
       ]
     );
@@ -206,7 +1139,8 @@ export default function useWeddingBuilder() {
             .selectedMediaCount,
 
         galleryImages:
-          weddingMedia.galleryCount
+          weddingMedia
+            .galleryCount
       }),
       [
         weddingForm
@@ -218,15 +1152,499 @@ export default function useWeddingBuilder() {
         weddingMedia
           .selectedMediaCount,
 
-        weddingMedia.galleryCount
+        weddingMedia
+          .galleryCount
       ]
     );
+
+  /*
+   * =====================================================
+   * AUTOGUARDADO
+   * =====================================================
+   */
+
+  const currentDraftSnapshot =
+    useMemo(
+      () =>
+        buildWeddingDraftSnapshot({
+          formData:
+            weddingForm.formData,
+
+          media:
+            weddingMedia.media,
+
+          formTab,
+
+          editingWedding
+        }),
+      [
+        weddingForm.formData,
+        weddingMedia.media,
+        formTab,
+        editingWedding
+      ]
+    );
+
+  const currentDraftFingerprint =
+    useMemo(
+      () =>
+        getWeddingDraftFingerprint(
+          currentDraftSnapshot
+        ),
+      [
+        currentDraftSnapshot
+      ]
+    );
+
+  latestDraftRef.current =
+    currentDraftSnapshot;
+
+  const clearAutosaveTimer =
+    useCallback(() => {
+      if (
+        !canUseWindow() ||
+        !autosaveTimerRef.current
+      ) {
+        return;
+      }
+
+      window.clearTimeout(
+        autosaveTimerRef.current
+      );
+
+      autosaveTimerRef.current =
+        null;
+    }, []);
+
+  const clearDraftState =
+    useCallback(
+      (options = {}) => {
+        const {
+          resetBaseline = false
+        } = options;
+
+        clearAutosaveTimer();
+
+        removeStoredWeddingDraft();
+
+        setRecoverableDraft(null);
+
+        setHasLocalDraft(false);
+
+        setDraftSavedAt('');
+
+        setDraftStatus('idle');
+
+        setDraftHasUnrestorableFiles(
+          false
+        );
+
+        if (resetBaseline) {
+          draftBaselineFingerprintRef.current =
+            latestDraftRef.current
+              ? getWeddingDraftFingerprint(
+                  latestDraftRef.current
+                )
+              : '';
+        }
+      },
+      [
+        clearAutosaveTimer
+      ]
+    );
+
+  const pauseAutosaveUntilNextRender =
+    useCallback(() => {
+      autosavePausedRef.current =
+        true;
+
+      if (!canUseWindow()) {
+        autosavePausedRef.current =
+          false;
+
+        return;
+      }
+
+      window.setTimeout(() => {
+        draftBaselineFingerprintRef.current =
+          latestDraftRef.current
+            ? getWeddingDraftFingerprint(
+                latestDraftRef.current
+              )
+            : '';
+
+        autosavePausedRef.current =
+          false;
+      }, 0);
+    }, []);
+
+  const saveDraftSnapshot =
+    useCallback(
+      (
+        draft =
+          latestDraftRef.current
+      ) => {
+        if (
+          !draft ||
+          !hasMeaningfulWeddingDraft(
+            draft
+          )
+        ) {
+          return false;
+        }
+
+        setDraftStatus('saving');
+
+        const saved =
+          writeStoredWeddingDraft(
+            draft
+          );
+
+        if (!saved) {
+          setDraftStatus(
+            'error'
+          );
+
+          return false;
+        }
+
+        /*
+         * Una vez que ya estamos trabajando en esta
+         * sesión, no queremos volver a mostrar el
+         * cuadro de recuperación.
+         */
+
+        setRecoverableDraft(null);
+
+        setHasLocalDraft(true);
+
+        setDraftSavedAt(
+          draft.savedAt
+        );
+
+        setDraftStatus('saved');
+
+        setDraftHasUnrestorableFiles(
+          Boolean(
+            draft
+              .hasUnrestorableFiles
+          )
+        );
+
+        return true;
+      },
+      []
+    );
+
+  const flushDraftNow =
+    useCallback(() => {
+      if (
+        recoverableDraft ||
+        autosavePausedRef.current
+      ) {
+        return false;
+      }
+
+      return saveDraftSnapshot(
+        buildWeddingDraftSnapshot({
+          formData:
+            weddingForm.formData,
+
+          media:
+            weddingMedia.media,
+
+          formTab,
+
+          editingWedding
+        })
+      );
+    }, [
+      editingWedding,
+      formTab,
+      recoverableDraft,
+      saveDraftSnapshot,
+      weddingForm.formData,
+      weddingMedia.media
+    ]);
+
+  const restoreDraft =
+    useCallback(() => {
+      const draft =
+        recoverableDraft ||
+        readStoredWeddingDraft();
+
+      if (
+        !draft ||
+        typeof draft !==
+          'object'
+      ) {
+        setRecoverableDraft(null);
+        setHasLocalDraft(false);
+        setDraftStatus('idle');
+
+        return false;
+      }
+
+      autosavePausedRef.current =
+        true;
+
+      weddingForm.loadFormData(
+        draft.formData || {}
+      );
+
+      weddingMedia.setMedia(
+        hydrateWeddingMedia(
+          draft.media || {}
+        )
+      );
+
+      const draftEditingWedding =
+        draft.mode ===
+          'editing' &&
+        draft.editingWedding?._id
+          ? {
+              ...draft.editingWedding,
+
+              media:
+                draft.media || {}
+            }
+          : null;
+
+      setEditingWedding(
+        draftEditingWedding
+      );
+
+      const restoredTab =
+        ALLOWED_DRAFT_TABS.includes(
+          draft.formTab
+        )
+          ? draft.formTab
+          : 'general';
+
+      setFormTab(
+        restoredTab
+      );
+
+      setActiveSection(
+        'create'
+      );
+
+      setRecoverableDraft(null);
+
+      setHasLocalDraft(true);
+
+      setDraftSavedAt(
+        draft.savedAt || ''
+      );
+
+      setDraftStatus(
+        'restored'
+      );
+
+      setDraftHasUnrestorableFiles(
+        Boolean(
+          draft
+            .hasUnrestorableFiles
+        )
+      );
+
+      setError('');
+
+      setSuccessMessage(
+        draft.hasUnrestorableFiles
+          ? 'El borrador fue recuperado. Algunos archivos locales deben seleccionarse nuevamente.'
+          : 'El borrador fue recuperado correctamente.'
+      );
+
+      if (canUseWindow()) {
+        window.setTimeout(
+          () => {
+            draftBaselineFingerprintRef.current =
+              getWeddingDraftFingerprint(
+                latestDraftRef.current
+              );
+
+            autosavePausedRef.current =
+              false;
+          },
+          0
+        );
+
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+      } else {
+        autosavePausedRef.current =
+          false;
+      }
+
+      return true;
+    }, [
+      recoverableDraft,
+      weddingForm,
+      weddingMedia
+    ]);
+
+  const discardDraft =
+    useCallback(() => {
+      clearDraftState({
+        resetBaseline: true
+      });
+
+      setSuccessMessage(
+        'El borrador guardado fue descartado.'
+      );
+
+      return true;
+    }, [
+      clearDraftState
+    ]);
+
+  /*
+   * Establecer estado inicial para comparar cambios.
+   */
+
+  useEffect(() => {
+    if (
+      draftBaselineFingerprintRef
+        .current === null
+    ) {
+      draftBaselineFingerprintRef.current =
+        currentDraftFingerprint;
+    }
+  }, [
+    currentDraftFingerprint
+  ]);
+
+  /*
+   * Guardar después de 1.2 segundos sin cambios.
+   */
+
+  useEffect(() => {
+    if (
+      !canUseWindow() ||
+      recoverableDraft ||
+      autosavePausedRef.current ||
+      currentDraftFingerprint ===
+        draftBaselineFingerprintRef
+          .current
+    ) {
+      return undefined;
+    }
+
+    if (
+      !hasMeaningfulWeddingDraft(
+        currentDraftSnapshot
+      )
+    ) {
+      clearAutosaveTimer();
+
+      return undefined;
+    }
+
+    clearAutosaveTimer();
+
+    setDraftStatus(
+      'pending'
+    );
+
+    autosaveTimerRef.current =
+      window.setTimeout(
+        () => {
+          const freshDraft =
+            buildWeddingDraftSnapshot({
+              formData:
+                weddingForm.formData,
+
+              media:
+                weddingMedia.media,
+
+              formTab,
+
+              editingWedding
+            });
+
+          saveDraftSnapshot(
+            freshDraft
+          );
+
+          autosaveTimerRef.current =
+            null;
+        },
+        WEDDING_DRAFT_AUTOSAVE_DELAY
+      );
+
+    return () => {
+      clearAutosaveTimer();
+    };
+  }, [
+    clearAutosaveTimer,
+    currentDraftFingerprint,
+    currentDraftSnapshot,
+    editingWedding,
+    formTab,
+    recoverableDraft,
+    saveDraftSnapshot,
+    weddingForm.formData,
+    weddingMedia.media
+  ]);
+
+  /*
+   * Intentar guardar antes de cerrar o recargar.
+   */
+
+  useEffect(() => {
+    if (!canUseWindow()) {
+      return undefined;
+    }
+
+    function handleBeforeUnload() {
+      if (
+        recoverableDraft ||
+        autosavePausedRef.current
+      ) {
+        return;
+      }
+
+      const latestDraft =
+        latestDraftRef.current;
+
+      if (
+        !latestDraft ||
+        !hasMeaningfulWeddingDraft(
+          latestDraft
+        )
+      ) {
+        return;
+      }
+
+      writeStoredWeddingDraft(
+        latestDraft
+      );
+    }
+
+    window.addEventListener(
+      'beforeunload',
+      handleBeforeUnload
+    );
+
+    return () => {
+      window.removeEventListener(
+        'beforeunload',
+        handleBeforeUnload
+      );
+    };
+  }, [
+    recoverableDraft
+  ]);
 
   /*
    * =====================================================
    * MENSAJES
    * =====================================================
    */
+
   function clearMessages() {
     setError('');
     setSuccessMessage('');
@@ -237,6 +1655,7 @@ export default function useWeddingBuilder() {
    * NAVEGACIÓN PRINCIPAL
    * =====================================================
    */
+
   function changeSection(section) {
     const allowedSections = [
       'create',
@@ -252,21 +1671,28 @@ export default function useWeddingBuilder() {
       return;
     }
 
-    setActiveSection(section);
+    setActiveSection(
+      section
+    );
 
     clearMessages();
 
-    if (section === 'events') {
+    if (
+      section === 'events'
+    ) {
       weddingEvents.loadEvents();
     }
   }
 
   /*
    * =====================================================
-   * PESTAÑAS DEL CONSTRUCTOR
+   * PESTAÑAS
    * =====================================================
    */
-  function changeFormTab(tabName) {
+
+  function changeFormTab(
+    tabName
+  ) {
     const allowedTabs = [
       'general',
       'content',
@@ -285,21 +1711,196 @@ export default function useWeddingBuilder() {
       return;
     }
 
-    setFormTab(tabName);
+    setFormTab(
+      tabName
+    );
 
     setError('');
   }
 
   /*
    * =====================================================
+   * CARGAR INVITACIÓN PARA EDITAR
+   * =====================================================
+   */
+
+  function startEditingWedding(
+    weddingOrId
+  ) {
+    let wedding = null;
+
+    if (
+      weddingOrId &&
+      typeof weddingOrId ===
+        'object'
+    ) {
+      wedding =
+        weddingOrId;
+    } else {
+      const weddingId =
+        cleanText(
+          String(
+            weddingOrId || ''
+          )
+        );
+
+      if (weddingId) {
+        wedding =
+          weddingEvents
+            .findEventById?.(
+              weddingId
+            );
+      }
+    }
+
+    if (!wedding) {
+      setError(
+        'No fue posible cargar la invitación para editar.'
+      );
+
+      return false;
+    }
+
+    const weddingId =
+      cleanText(
+        String(
+          wedding._id ||
+            wedding.id ||
+            ''
+        )
+      );
+
+    if (!weddingId) {
+      setError(
+        'La invitación no tiene un identificador válido.'
+      );
+
+      return false;
+    }
+
+    clearMessages();
+
+    /*
+     * Cuando elegimos explícitamente editar otra boda,
+     * descartamos el borrador anterior.
+     */
+
+    autosavePausedRef.current =
+      true;
+
+    clearDraftState();
+
+    weddingForm.loadFormData(
+      wedding
+    );
+
+    weddingMedia.setMedia(
+      hydrateWeddingMedia(
+        wedding.media
+      )
+    );
+
+    setEditingWedding(
+      wedding
+    );
+
+    pauseAutosaveUntilNextRender();
+
+    weddingEvents
+      .clearGeneratedWedding?.();
+
+    setActiveSection(
+      'create'
+    );
+
+    setFormTab(
+      'general'
+    );
+
+    setSuccessMessage(
+      `Editando la invitación de ${cleanText(
+        wedding.groomName
+      ) || 'la pareja'}${
+        cleanText(
+          wedding.brideName
+        )
+          ? ` y ${cleanText(
+              wedding.brideName
+            )}`
+          : ''
+      }.`
+    );
+
+    if (canUseWindow()) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+
+    return true;
+  }
+
+  /*
+   * =====================================================
+   * CANCELAR EDICIÓN
+   * =====================================================
+   */
+
+  function cancelEditing() {
+    if (!isEditing) {
+      return false;
+    }
+
+    autosavePausedRef.current =
+      true;
+
+    clearDraftState();
+
+    setEditingWedding(
+      null
+    );
+
+    weddingForm.resetForm(
+      adminSettings.defaultMessage
+    );
+
+    weddingMedia.clearMedia();
+
+    pauseAutosaveUntilNextRender();
+
+    weddingEvents
+      .clearGeneratedWedding?.();
+
+    setFormTab(
+      'general'
+    );
+
+    clearMessages();
+
+    setSuccessMessage(
+      'La edición fue cancelada.'
+    );
+
+    if (canUseWindow()) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+
+    return true;
+  }
+
+  /*
+   * =====================================================
    * LIMPIAR CONSTRUCTOR
    * =====================================================
-   *
-   * Ahora respeta:
-   *
-   * settings.confirmBeforeReset
    */
-  function resetBuilder(options = {}) {
+
+  function resetBuilder(
+    options = {}
+  ) {
     const {
       force = false
     } = options;
@@ -312,7 +1913,9 @@ export default function useWeddingBuilder() {
     ) {
       const shouldReset =
         window.confirm(
-          '¿Deseas limpiar la invitación actual? Los datos que no hayas guardado se perderán.'
+          isEditing
+            ? '¿Deseas cancelar la edición y limpiar el constructor? Los cambios que no hayas guardado se perderán.'
+            : '¿Deseas limpiar la invitación actual? Los datos que no hayas guardado se perderán.'
         );
 
       if (!shouldReset) {
@@ -320,16 +1923,29 @@ export default function useWeddingBuilder() {
       }
     }
 
+    autosavePausedRef.current =
+      true;
+
+    clearDraftState();
+
+    setEditingWedding(
+      null
+    );
+
     weddingForm.resetForm(
       adminSettings.defaultMessage
     );
 
     weddingMedia.clearMedia();
 
+    pauseAutosaveUntilNextRender();
+
     weddingEvents
       .clearGeneratedWedding?.();
 
-    setFormTab('general');
+    setFormTab(
+      'general'
+    );
 
     setError('');
 
@@ -351,27 +1967,113 @@ export default function useWeddingBuilder() {
    * =====================================================
    * LIMPIAR DESPUÉS DE CREAR
    * =====================================================
-   *
-   * Aquí NO pedimos confirmación.
-   *
-   * La boda ya fue guardada correctamente.
    */
+
   function clearBuilderAfterCreation() {
+    autosavePausedRef.current =
+      true;
+
+    clearDraftState();
+
+    setEditingWedding(
+      null
+    );
+
     weddingForm.resetForm(
       adminSettings.defaultMessage
     );
 
     weddingMedia.clearMedia();
 
-    setFormTab('general');
+    setFormTab(
+      'general'
+    );
+
+    pauseAutosaveUntilNextRender();
   }
 
   /*
    * =====================================================
-   * CREAR INVITACIÓN
+   * ACTUALIZAR EVENTO EN MEMORIA
    * =====================================================
    */
-  async function handleSubmit(event) {
+
+  function replaceEventInList(
+    updatedWedding
+  ) {
+    const updatedId =
+      cleanText(
+        String(
+          updatedWedding?._id ||
+            updatedWedding?.id ||
+            ''
+        )
+      );
+
+    if (!updatedId) {
+      return;
+    }
+
+    weddingEvents.setEvents(
+      (currentEvents) => {
+        if (
+          !Array.isArray(
+            currentEvents
+          )
+        ) {
+          return [
+            updatedWedding
+          ];
+        }
+
+        let found = false;
+
+        const nextEvents =
+          currentEvents.map(
+            (event) => {
+              const eventId =
+                cleanText(
+                  String(
+                    event?._id ||
+                      event?.id ||
+                      ''
+                  )
+                );
+
+              if (
+                eventId ===
+                updatedId
+              ) {
+                found = true;
+
+                return updatedWedding;
+              }
+
+              return event;
+            }
+          );
+
+        if (!found) {
+          return [
+            updatedWedding,
+            ...nextEvents
+          ];
+        }
+
+        return nextEvents;
+      }
+    );
+  }
+
+  /*
+   * =====================================================
+   * CREAR / ACTUALIZAR INVITACIÓN
+   * =====================================================
+   */
+
+  async function handleSubmit(
+    event
+  ) {
     event?.preventDefault();
 
     if (
@@ -385,11 +2087,11 @@ export default function useWeddingBuilder() {
     clearMessages();
 
     /*
-     * Validamos primero.
-     *
-     * No abrimos pestañas ni subimos archivos
-     * si el formulario todavía contiene errores.
+     * ===================================================
+     * 1. VALIDAR
+     * ===================================================
      */
+
     const validation =
       validateWeddingForm({
         formData:
@@ -404,38 +2106,34 @@ export default function useWeddingBuilder() {
         validation.message
       );
 
-      if (validation.tab) {
+      if (
+        validation.tab
+      ) {
         setFormTab(
           validation.tab
         );
       }
 
-      /*
-       * Esperamos a que React muestre
-       * la pestaña correcta.
-       */
-      window.setTimeout(
-        () => {
-          focusInvalidField(
-            validation.field
-          );
-        },
-        80
-      );
+      if (canUseWindow()) {
+        window.setTimeout(
+          () => {
+            focusInvalidField(
+              validation.field
+            );
+          },
+          80
+        );
+      }
 
       return null;
     }
 
     /*
-     * Si el administrador eligió:
-     *
-     * "Abrir automáticamente después de crear"
-     *
-     * abrimos la pestaña AHORA, antes del await.
-     *
-     * Esto reduce el riesgo de que el navegador
-     * bloquee la pestaña como popup.
+     * ===================================================
+     * 2. PREABRIR INVITACIÓN
+     * ===================================================
      */
+
     let invitationWindow =
       null;
 
@@ -450,7 +2148,9 @@ export default function useWeddingBuilder() {
           '_blank'
         );
 
-      if (invitationWindow) {
+      if (
+        invitationWindow
+      ) {
         invitationWindow.opener =
           null;
       }
@@ -463,86 +2163,197 @@ export default function useWeddingBuilder() {
       setSubmitting(true);
 
       /*
-       * ==============================================
-       * 1. SUBIR ARCHIVOS REALES
-       * ==============================================
+       * =================================================
+       * 3. SUBIR MULTIMEDIA
+       * =================================================
        */
+
       const uploadResponse =
         await uploadWeddingMedia(
           weddingMedia.media
         );
 
+      const uploadedMedia =
+        uploadResponse?.media ||
+        {};
+
       /*
-       * ==============================================
-       * 2. CREAR PAYLOAD
-       * ==============================================
+       * =================================================
+       * 4. RECONSTRUIR GALERÍA
+       * =================================================
        */
+
+      const orderedGallery =
+        buildOrderedGallery(
+          weddingMedia.media
+            ?.gallery,
+
+          uploadedMedia.gallery
+        );
+
+      const finalUploadedMedia = {
+        ...uploadedMedia,
+
+        gallery:
+          orderedGallery
+      };
+
+      /*
+       * =================================================
+       * 5. CREAR PAYLOAD
+       * =================================================
+       */
+
       const payload =
         createWeddingPayload({
           formData:
             weddingForm.formData,
 
           uploadedMedia:
-            uploadResponse?.media ||
-            {}
+            finalUploadedMedia
         });
 
+      let savedWedding;
+
       /*
-       * ==============================================
-       * 3. GUARDAR EN MONGODB
-       * ==============================================
+       * =================================================
+       * 6A. ACTUALIZAR
+       * =================================================
        */
-      const createdWedding =
-        await weddingEvents
-          .createEvent(
+
+      if (isEditing) {
+        savedWedding =
+          await updateWedding(
+            editingWeddingId,
             payload
           );
 
-      if (!createdWedding) {
-        invitationWindow?.close();
+        if (!savedWedding) {
+          invitationWindow
+            ?.close();
 
-        return null;
+          return null;
+        }
+
+        replaceEventInList(
+          savedWedding
+        );
+
+        setEditingWedding(
+          savedWedding
+        );
+
+        weddingEvents
+          .setGeneratedWedding?.(
+            savedWedding
+          );
+
+        weddingForm.loadFormData(
+          savedWedding
+        );
+
+        weddingMedia.setMedia(
+          hydrateWeddingMedia(
+            savedWedding.media
+          )
+        );
+      } else {
+        /*
+         * ===============================================
+         * 6B. CREAR
+         * ===============================================
+         */
+
+        savedWedding =
+          await weddingEvents
+            .createEvent(
+              payload
+            );
+
+        if (!savedWedding) {
+          invitationWindow
+            ?.close();
+
+          return null;
+        }
       }
 
-      if (!createdWedding.slug) {
-        invitationWindow?.close();
+      /*
+       * =================================================
+       * 7. VALIDAR SLUG
+       * =================================================
+       */
+
+      if (!savedWedding.slug) {
+        invitationWindow
+          ?.close();
 
         throw new Error(
-          'La invitación fue creada, pero el servidor no devolvió su enlace.'
+          isEditing
+            ? 'Los cambios fueron guardados, pero el servidor no devolvió el enlace de la invitación.'
+            : 'La invitación fue creada, pero el servidor no devolvió su enlace.'
         );
       }
 
       /*
-       * ==============================================
-       * 4. ABRIR INVITACIÓN SI ESTÁ CONFIGURADO
-       * ==============================================
+       * =================================================
+       * 8. ABRIR INVITACIÓN
+       * =================================================
        */
-      const createdUrl =
+
+      const publicUrl =
         buildPublicWeddingUrl(
-          createdWedding
+          savedWedding
         );
 
       if (
         invitationWindow &&
-        createdUrl
+        publicUrl
       ) {
-        invitationWindow.location.href =
-          createdUrl;
+        invitationWindow
+          .location
+          .href =
+          publicUrl;
       }
 
       /*
-       * ==============================================
-       * 5. LIMPIAR CONSTRUCTOR
-       * ==============================================
+       * =================================================
+       * 9. BORRAR BORRADOR LOCAL
+       * =================================================
+       *
+       * Ya fue guardada correctamente en el servidor.
        */
-      clearBuilderAfterCreation();
 
-      setSuccessMessage(
-        adminSettings
-          .openCreatedInvitation
-          ? 'La invitación fue creada correctamente y se abrió en una nueva pestaña.'
-          : 'La invitación fue creada correctamente.'
-      );
+      autosavePausedRef.current =
+        true;
+
+      clearDraftState();
+
+      /*
+       * =================================================
+       * 10. FINALIZAR
+       * =================================================
+       */
+
+      if (isEditing) {
+        setSuccessMessage(
+          adminSettings
+            .openCreatedInvitation
+            ? 'Los cambios fueron guardados correctamente y la invitación se abrió en una nueva pestaña.'
+            : 'Los cambios de la invitación fueron guardados correctamente.'
+        );
+      } else {
+        clearBuilderAfterCreation();
+
+        setSuccessMessage(
+          adminSettings
+            .openCreatedInvitation
+            ? 'La invitación fue creada correctamente y se abrió en una nueva pestaña.'
+            : 'La invitación fue creada correctamente.'
+        );
+      }
+
+      pauseAutosaveUntilNextRender();
 
       if (canUseWindow()) {
         window.scrollTo({
@@ -551,13 +2362,18 @@ export default function useWeddingBuilder() {
         });
       }
 
-      return createdWedding;
+      return savedWedding;
     } catch (submitError) {
-      invitationWindow?.close();
+      invitationWindow
+        ?.close();
 
       setError(
         submitError?.message ||
-          'No fue posible crear la invitación.'
+          (
+            isEditing
+              ? 'No fue posible guardar los cambios de la invitación.'
+              : 'No fue posible crear la invitación.'
+          )
       );
 
       return null;
@@ -573,11 +2389,8 @@ export default function useWeddingBuilder() {
    * =====================================================
    * ELIMINAR EVENTO
    * =====================================================
-   *
-   * Ahora respeta:
-   *
-   * settings.confirmBeforeDelete
    */
+
   async function handleDelete(
     eventId
   ) {
@@ -608,6 +2421,41 @@ export default function useWeddingBuilder() {
           eventId
         );
 
+      const deletedId =
+        cleanText(
+          String(
+            eventId || ''
+          )
+        );
+
+      if (
+        isEditing &&
+        deletedId ===
+          editingWeddingId
+      ) {
+        autosavePausedRef.current =
+          true;
+
+        clearDraftState();
+
+        setEditingWedding(
+          null
+        );
+
+        weddingForm.resetForm(
+          adminSettings
+            .defaultMessage
+        );
+
+        weddingMedia.clearMedia();
+
+        setFormTab(
+          'general'
+        );
+
+        pauseAutosaveUntilNextRender();
+      }
+
       setSuccessMessage(
         'La invitación fue eliminada correctamente.'
       );
@@ -628,6 +2476,7 @@ export default function useWeddingBuilder() {
    * GUARDAR AJUSTES
    * =====================================================
    */
+
   function handleSaveSettings(
     event
   ) {
@@ -639,14 +2488,16 @@ export default function useWeddingBuilder() {
 
   /*
    * =====================================================
-   * APLICAR MENSAJE PREDETERMINADO
+   * MENSAJE PREDETERMINADO
    * =====================================================
    */
+
   function applyDefaultMessage() {
     weddingForm
       .updateFormField(
         'welcomeMessage',
-        adminSettings.defaultMessage
+        adminSettings
+          .defaultMessage
       );
 
     setError('');
@@ -661,8 +2512,11 @@ export default function useWeddingBuilder() {
    * VISTA PREVIA
    * =====================================================
    */
+
   function openPreview() {
-    setFormTab('preview');
+    setFormTab(
+      'preview'
+    );
 
     setError('');
 
@@ -675,15 +2529,24 @@ export default function useWeddingBuilder() {
   }
 
   function goToGeneralInformation() {
-    setFormTab('general');
+    setFormTab(
+      'general'
+    );
 
     setError('');
   }
+
+  /*
+   * =====================================================
+   * RETORNO DEL BUILDER
+   * =====================================================
+   */
 
   return {
     /*
      * Navegación
      */
+
     activeSection,
     setActiveSection,
     changeSection,
@@ -691,12 +2554,67 @@ export default function useWeddingBuilder() {
     formTab,
     setFormTab,
     changeFormTab,
+
     openPreview,
     goToGeneralInformation,
 
     /*
+     * Modo edición
+     */
+
+    isEditing,
+    editingWedding,
+    editingWeddingId,
+
+    editingWeddingSlug:
+      cleanText(
+        editingWedding?.slug
+      ),
+
+    startEditingWedding,
+    cancelEditing,
+
+    /*
+     * =================================================
+     * BORRADOR / AUTOGUARDADO
+     * =================================================
+     */
+
+    hasRecoverableDraft:
+      Boolean(
+        recoverableDraft
+      ),
+
+    hasLocalDraft,
+
+    recoverableDraft,
+
+    draftSavedAt,
+
+    /*
+     * Estados posibles:
+     *
+     * idle
+     * available
+     * pending
+     * saving
+     * saved
+     * restored
+     * error
+     */
+
+    draftStatus,
+
+    draftHasUnrestorableFiles,
+
+    restoreDraft,
+    discardDraft,
+    flushDraftNow,
+
+    /*
      * Alertas
      */
+
     error,
     setError,
 
@@ -708,6 +2626,7 @@ export default function useWeddingBuilder() {
     /*
      * Formulario
      */
+
     formData:
       weddingForm.formData,
 
@@ -762,6 +2681,7 @@ export default function useWeddingBuilder() {
     /*
      * Itinerario
      */
+
     itinerary:
       itinerary.itinerary,
 
@@ -820,6 +2740,7 @@ export default function useWeddingBuilder() {
     /*
      * Multimedia
      */
+
     media:
       weddingMedia.media,
 
@@ -906,14 +2827,17 @@ export default function useWeddingBuilder() {
         .moveGalleryImageDown,
 
     clearGallery:
-      weddingMedia.clearGallery,
+      weddingMedia
+        .clearGallery,
 
     clearMedia:
-      weddingMedia.clearMedia,
+      weddingMedia
+        .clearMedia,
 
     /*
      * Eventos
      */
+
     events:
       weddingEvents.events,
 
@@ -929,7 +2853,8 @@ export default function useWeddingBuilder() {
         .setGeneratedWedding,
 
     generatedUrl:
-      weddingEvents.generatedUrl,
+      weddingEvents
+        .generatedUrl,
 
     loading:
       submitting ||
@@ -979,14 +2904,9 @@ export default function useWeddingBuilder() {
         .findEventBySlug,
 
     /*
-     * =================================================
-     * AJUSTES
-     * =================================================
-     *
-     * Dejamos TODOS disponibles para que en el
-     * siguiente paso podamos conectar el sidebar
-     * y mejorar visualmente el admin.
+     * Ajustes
      */
+
     settings:
       adminSettings.settings,
 
@@ -1001,7 +2921,8 @@ export default function useWeddingBuilder() {
         .sidebarSubtitle,
 
     defaultMessage:
-      adminSettings.defaultMessage,
+      adminSettings
+        .defaultMessage,
 
     defaultGuestBookTitle:
       adminSettings
@@ -1032,7 +2953,8 @@ export default function useWeddingBuilder() {
         .compactSidebar,
 
     lastSavedAt:
-      adminSettings.lastSavedAt,
+      adminSettings
+        .lastSavedAt,
 
     hasUnsavedChanges:
       adminSettings
@@ -1043,7 +2965,8 @@ export default function useWeddingBuilder() {
         .updateSetting,
 
     getSetting:
-      adminSettings.getSetting,
+      adminSettings
+        .getSetting,
 
     handleSettingChange:
       adminSettings
@@ -1066,17 +2989,21 @@ export default function useWeddingBuilder() {
         .handleDefaultGuestBookTitleChange,
 
     saveSettings:
-      adminSettings.saveSettings,
+      adminSettings
+        .saveSettings,
 
     resetSettings:
-      adminSettings.resetSettings,
+      adminSettings
+        .resetSettings,
 
     reloadSettings:
-      adminSettings.reloadSettings,
+      adminSettings
+        .reloadSettings,
 
     /*
      * Acciones principales
      */
+
     applyDefaultMessage,
 
     handleSubmit,
@@ -1089,6 +3016,7 @@ export default function useWeddingBuilder() {
     /*
      * Resumen
      */
+
     previewDate,
     builderSummary
   };

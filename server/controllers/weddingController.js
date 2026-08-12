@@ -14,6 +14,19 @@ function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
+
+function createSlug(text) {
+  return cleanText(text)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function cleanBoolean(value, defaultValue = true) {
   if (typeof value === 'boolean') {
     return value;
@@ -30,17 +43,13 @@ function cleanBoolean(value, defaultValue = true) {
   return defaultValue;
 }
 
-function createSlug(text) {
-  return cleanText(text)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-async function generateUniqueSlug(groomName, brideName, eventDate) {
+async function generateUniqueSlug(
+  groomName,
+  brideName,
+  eventDate
+) {
   const date = new Date(eventDate);
+
   const year = date.getUTCFullYear();
 
   const namesSlug =
@@ -60,7 +69,9 @@ async function generateUniqueSlug(groomName, brideName, eventDate) {
 }
 
 function normalizeLocation(body = {}) {
-  const location = isObject(body.location) ? body.location : {};
+  const location = isObject(body.location)
+    ? body.location
+    : {};
 
   return {
     venueName: cleanText(
@@ -84,37 +95,47 @@ function normalizeLocation(body = {}) {
 }
 
 function normalizeParents(body = {}) {
-  const parents = isObject(body.parents) ? body.parents : {};
+  const parents = isObject(body.parents)
+    ? body.parents
+    : {};
 
   return {
     groomFather: cleanText(
-      parents.groomFather || body.groomFather
+      parents.groomFather ||
+        body.groomFather
     ),
 
     groomMother: cleanText(
-      parents.groomMother || body.groomMother
+      parents.groomMother ||
+        body.groomMother
     ),
 
     brideFather: cleanText(
-      parents.brideFather || body.brideFather
+      parents.brideFather ||
+        body.brideFather
     ),
 
     brideMother: cleanText(
-      parents.brideMother || body.brideMother
+      parents.brideMother ||
+        body.brideMother
     )
   };
 }
 
 function normalizeStory(body = {}) {
-  const story = isObject(body.story) ? body.story : {};
+  const story = isObject(body.story)
+    ? body.story
+    : {};
 
   return {
     title: cleanText(
-      story.title || body.storyTitle
+      story.title ||
+        body.storyTitle
     ),
 
     text: cleanText(
-      story.text || body.storyText
+      story.text ||
+        body.storyText
     )
   };
 }
@@ -126,45 +147,56 @@ function normalizeDressCode(body = {}) {
 
   return {
     title: cleanText(
-      dressCode.title || body.dressCodeTitle
+      dressCode.title ||
+        body.dressCodeTitle
     ),
 
     women: cleanText(
-      dressCode.women || body.dressCodeWomen
+      dressCode.women ||
+        body.dressCodeWomen
     ),
 
     men: cleanText(
-      dressCode.men || body.dressCodeMen
+      dressCode.men ||
+        body.dressCodeMen
     ),
 
     notes: cleanText(
-      dressCode.notes || body.dressCodeNotes
+      dressCode.notes ||
+        body.dressCodeNotes
     )
   };
 }
 
 function normalizeGifts(body = {}) {
-  const gifts = isObject(body.gifts) ? body.gifts : {};
+  const gifts = isObject(body.gifts)
+    ? body.gifts
+    : {};
 
   return {
     message: cleanText(
-      gifts.message || body.giftMessage
+      gifts.message ||
+        body.giftMessage
     ),
 
     bankName: cleanText(
-      gifts.bankName || body.bankName
+      gifts.bankName ||
+        body.bankName
     ),
 
     accountHolder: cleanText(
-      gifts.accountHolder || body.accountHolder
+      gifts.accountHolder ||
+        body.accountHolder
     ),
 
     accountNumber: cleanText(
-      gifts.accountNumber || body.accountNumber
+      gifts.accountNumber ||
+        body.accountNumber
     ),
 
     clabe: cleanText(
-      gifts.clabe || body.clabe
+      gifts.clabe ||
+        body.clabe
     ).replace(/\s/g, '')
   };
 }
@@ -176,7 +208,8 @@ function normalizeGuestBook(body = {}) {
 
   return {
     title: cleanText(
-      guestBook.title || body.guestBookTitle
+      guestBook.title ||
+        body.guestBookTitle
     )
   };
 }
@@ -354,7 +387,9 @@ function normalizeMedia(media) {
     ? source.gallery
     : Array.isArray(source.galleryUrls)
       ? source.galleryUrls
-      : Array.isArray(source.galleryFileNames)
+      : Array.isArray(
+            source.galleryFileNames
+          )
         ? source.galleryFileNames
         : Array.isArray(source.photos)
           ? source.photos
@@ -393,13 +428,14 @@ function normalizeMedia(media) {
     coupleImage,
 
     /*
-     * Campo actual utilizado por la invitación.
+     * Campo principal utilizado por
+     * la invitación pública.
      */
     musicUrl,
 
     /*
-     * Compatibilidad con versiones anteriores
-     * del administrador y de LandingPage.
+     * Compatibilidad con versiones
+     * anteriores del administrador.
      */
     backgroundMusic: musicUrl,
 
@@ -435,37 +471,236 @@ function buildWeddingData(
       body.welcomeMessage
     ),
 
-    location: normalizeLocation(body),
+    location:
+      normalizeLocation(body),
 
-    parents: normalizeParents(body),
+    parents:
+      normalizeParents(body),
 
-    story: normalizeStory(body),
+    story:
+      normalizeStory(body),
 
-    dressCode: normalizeDressCode(body),
+    dressCode:
+      normalizeDressCode(body),
 
-    gifts: normalizeGifts(body),
+    gifts:
+      normalizeGifts(body),
 
-    guestBook: normalizeGuestBook(body),
+    guestBook:
+      normalizeGuestBook(body),
 
-    sections: normalizeSections(
-      body.sections
-    ),
+    sections:
+      normalizeSections(
+        body.sections
+      ),
 
-    itinerary: normalizeItinerary(
-      body.itinerary
-    ),
+    itinerary:
+      normalizeItinerary(
+        body.itinerary
+      ),
 
-    theme: normalizeTheme(
-      body.theme
-    ),
+    theme:
+      normalizeTheme(
+        body.theme
+      ),
 
-    media: normalizeMedia(
-      body.media
-    ),
+    media:
+      normalizeMedia(
+        body.media
+      ),
 
-    status: normalizeStatus(
-      body.status
+    status:
+      normalizeStatus(
+        body.status
+      )
+  };
+}
+
+/*
+ * =========================================================
+ * MEZCLAR DATOS PARA EDICIÓN
+ * =========================================================
+ *
+ * Al editar una invitación:
+ *
+ * - conserva lo que no llegó en el request;
+ * - permite cambiar únicamente una parte;
+ * - permite vaciar deliberadamente arrays/campos enviados;
+ * - conserva multimedia existente si no fue reemplazada;
+ * - conserva el mismo slug.
+ */
+
+function mergeWeddingBody(
+  existingWedding,
+  incomingBody = {}
+) {
+  const existing =
+    typeof existingWedding?.toObject ===
+    'function'
+      ? existingWedding.toObject()
+      : existingWedding || {};
+
+  const incoming = isObject(
+    incomingBody
+  )
+    ? incomingBody
+    : {};
+
+  const merged = {
+    ...existing,
+    ...incoming
+  };
+
+  const nestedFields = [
+    'location',
+    'parents',
+    'story',
+    'dressCode',
+    'gifts',
+    'guestBook',
+    'sections',
+    'theme',
+    'media'
+  ];
+
+  nestedFields.forEach(
+    (fieldName) => {
+      const existingValue =
+        isObject(existing[fieldName])
+          ? existing[fieldName]
+          : {};
+
+      const incomingValue =
+        isObject(incoming[fieldName])
+          ? incoming[fieldName]
+          : {};
+
+      /*
+       * Si el objeto completo NO fue enviado,
+       * conservamos el existente.
+       *
+       * Si fue enviado parcialmente, mezclamos
+       * las propiedades para no borrar otras.
+       */
+      merged[fieldName] = {
+        ...existingValue,
+        ...incomingValue
+      };
+    }
+  );
+
+  /*
+   * Los arrays deben tratarse aparte.
+   *
+   * Si itinerary fue enviado como [],
+   * queremos permitir vaciarlo.
+   *
+   * Si no fue enviado, conservamos el existente.
+   */
+  merged.itinerary =
+    hasOwn(incoming, 'itinerary')
+      ? incoming.itinerary
+      : existing.itinerary;
+
+  /*
+   * gallery pertenece a media.
+   * Si llega [] debe vaciarse.
+   * Si no llega, se conserva.
+   */
+  const incomingMedia =
+    isObject(incoming.media)
+      ? incoming.media
+      : null;
+
+  if (
+    incomingMedia &&
+    hasOwn(
+      incomingMedia,
+      'gallery'
     )
+  ) {
+    merged.media.gallery =
+      incomingMedia.gallery;
+  } else {
+    merged.media.gallery =
+      existing.media?.gallery ||
+      [];
+  }
+
+  /*
+   * Estado.
+   */
+  merged.status =
+    hasOwn(incoming, 'status')
+      ? incoming.status
+      : existing.status;
+
+  /*
+   * Fecha.
+   */
+  merged.eventDate =
+    hasOwn(incoming, 'eventDate')
+      ? incoming.eventDate
+      : existing.eventDate;
+
+  return merged;
+}
+
+function validateWeddingRequiredFields(
+  body
+) {
+  const groomName = cleanText(
+    body.groomName
+  );
+
+  const brideName = cleanText(
+    body.brideName
+  );
+
+  const welcomeMessage = cleanText(
+    body.welcomeMessage
+  );
+
+  const eventDate =
+    body.eventDate;
+
+  if (
+    !groomName ||
+    !brideName ||
+    !eventDate ||
+    !welcomeMessage
+  ) {
+    return {
+      valid: false,
+
+      message:
+        'Completa los nombres de los novios, la fecha y el mensaje de bienvenida.'
+    };
+  }
+
+  const parsedDate =
+    new Date(eventDate);
+
+  if (
+    Number.isNaN(
+      parsedDate.getTime()
+    )
+  ) {
+    return {
+      valid: false,
+
+      message:
+        'La fecha del evento no es válida.'
+    };
+  }
+
+  return {
+    valid: true,
+    message: '',
+    parsedDate,
+    groomName,
+    brideName,
+    welcomeMessage
   };
 }
 
@@ -474,93 +709,83 @@ function sendDatabaseError(
   error,
   fallbackMessage
 ) {
-  if (error?.name === 'ValidationError') {
-    const firstError = Object.values(
-      error.errors || {}
-    )[0];
+  if (
+    error?.name ===
+    'ValidationError'
+  ) {
+    const firstError =
+      Object.values(
+        error.errors || {}
+      )[0];
 
-    return res.status(400).json({
-      message:
-        firstError?.message ||
-        'Los datos enviados no son válidos.'
-    });
+    return res
+      .status(400)
+      .json({
+        message:
+          firstError?.message ||
+          'Los datos enviados no son válidos.'
+      });
   }
 
   if (error?.code === 11000) {
-    return res.status(409).json({
-      message:
-        'Ya existe una invitación con esos datos. Intenta nuevamente.'
-    });
+    return res
+      .status(409)
+      .json({
+        message:
+          'Ya existe una invitación con esos datos. Intenta nuevamente.'
+      });
   }
 
-  return res.status(500).json({
-    message: fallbackMessage
-  });
+  return res
+    .status(500)
+    .json({
+      message:
+        fallbackMessage
+    });
 }
+
+/*
+ * =========================================================
+ * CREAR INVITACIÓN
+ * =========================================================
+ */
 
 exports.createWedding = async (
   req,
   res
 ) => {
   try {
-    const body = isObject(req.body)
+    const body = isObject(
+      req.body
+    )
       ? req.body
       : {};
 
-    const groomName = cleanText(
-      body.groomName
-    );
+    const validation =
+      validateWeddingRequiredFields(
+        body
+      );
 
-    const brideName = cleanText(
-      body.brideName
-    );
-
-    const eventDate = cleanText(
-      body.eventDate
-    );
-
-    const welcomeMessage = cleanText(
-      body.welcomeMessage
-    );
-
-    if (
-      !groomName ||
-      !brideName ||
-      !eventDate ||
-      !welcomeMessage
-    ) {
-      return res.status(400).json({
-        message:
-          'Completa los nombres de los novios, la fecha y el mensaje de bienvenida.'
-      });
-    }
-
-    const parsedDate = new Date(
-      eventDate
-    );
-
-    if (
-      Number.isNaN(
-        parsedDate.getTime()
-      )
-    ) {
-      return res.status(400).json({
-        message:
-          'La fecha del evento no es válida.'
-      });
+    if (!validation.valid) {
+      return res
+        .status(400)
+        .json({
+          message:
+            validation.message
+        });
     }
 
     const slug =
       await generateUniqueSlug(
-        groomName,
-        brideName,
-        parsedDate
+        validation.groomName,
+        validation.brideName,
+        validation.parsedDate
       );
 
     const weddingData =
       buildWeddingData(
         body,
-        parsedDate,
+        validation.parsedDate,
         slug
       );
 
@@ -585,6 +810,12 @@ exports.createWedding = async (
     );
   }
 };
+
+/*
+ * =========================================================
+ * LISTAR INVITACIONES
+ * =========================================================
+ */
 
 exports.getWeddings = async (
   _req,
@@ -615,69 +846,222 @@ exports.getWeddings = async (
   }
 };
 
-exports.getWeddingBySlug = async (
+/*
+ * =========================================================
+ * CONSULTAR INVITACIÓN POR SLUG
+ * =========================================================
+ */
+
+exports.getWeddingBySlug =
+  async (req, res) => {
+    try {
+      const slug = cleanText(
+        req.params.slug
+      ).toLowerCase();
+
+      if (!slug) {
+        return res
+          .status(400)
+          .json({
+            message:
+              'La invitación solicitada no es válida.'
+          });
+      }
+
+      const wedding =
+        await Wedding.findOne({
+          slug
+        }).lean();
+
+      if (!wedding) {
+        return res
+          .status(404)
+          .json({
+            message:
+              'La invitación no existe.'
+          });
+      }
+
+      return res
+        .status(200)
+        .json(wedding);
+    } catch (error) {
+      console.error(
+        'Error al consultar invitación:',
+        error
+      );
+
+      return sendDatabaseError(
+        res,
+        error,
+        'No fue posible cargar la invitación.'
+      );
+    }
+  };
+
+/*
+ * =========================================================
+ * ACTUALIZAR INVITACIÓN EXISTENTE
+ * =========================================================
+ *
+ * PUT /api/weddings/:id
+ *
+ * MUY IMPORTANTE:
+ *
+ * Aquí NO generamos un slug nuevo.
+ *
+ * Ejemplo:
+ *
+ * /boda/jos-y-itz-2026
+ *
+ * seguirá siendo:
+ *
+ * /boda/jos-y-itz-2026
+ *
+ * aunque cambies nombres, fecha, fotografías,
+ * colores, itinerario o cualquier otro dato.
+ */
+
+exports.updateWedding = async (
   req,
   res
 ) => {
   try {
-    const slug = cleanText(
-      req.params.slug
-    ).toLowerCase();
-
-    if (!slug) {
-      return res.status(400).json({
-        message:
-          'La invitación solicitada no es válida.'
-      });
-    }
-
-    const wedding =
-      await Wedding.findOne({
-        slug
-      }).lean();
-
-    if (!wedding) {
-      return res.status(404).json({
-        message:
-          'La invitación no existe.'
-      });
-    }
-
-    return res
-      .status(200)
-      .json(wedding);
-  } catch (error) {
-    console.error(
-      'Error al consultar invitación:',
-      error
-    );
-
-    return sendDatabaseError(
-      res,
-      error,
-      'No fue posible cargar la invitación.'
-    );
-  }
-};
-
-exports.deleteWedding = async (
-  req,
-  res
-) => {
-  try {
-    const weddingId = cleanText(
-      req.params.id
-    );
+    const weddingId =
+      cleanText(
+        req.params.id
+      );
 
     if (
       !mongoose.isValidObjectId(
         weddingId
       )
     ) {
-      return res.status(400).json({
-        message:
-          'El identificador del evento no es válido.'
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            'El identificador del evento no es válido.'
+        });
+    }
+
+    const wedding =
+      await Wedding.findById(
+        weddingId
+      );
+
+    if (!wedding) {
+      return res
+        .status(404)
+        .json({
+          message:
+            'El evento que deseas editar no existe.'
+        });
+    }
+
+    const incomingBody =
+      isObject(req.body)
+        ? req.body
+        : {};
+
+    /*
+     * Unimos la información guardada con
+     * solamente lo que llegó del frontend.
+     */
+    const mergedBody =
+      mergeWeddingBody(
+        wedding,
+        incomingBody
+      );
+
+    const validation =
+      validateWeddingRequiredFields(
+        mergedBody
+      );
+
+    if (!validation.valid) {
+      return res
+        .status(400)
+        .json({
+          message:
+            validation.message
+        });
+    }
+
+    /*
+     * Conservamos SIEMPRE el mismo slug.
+     */
+    const existingSlug =
+      cleanText(
+        wedding.slug
+      );
+
+    const weddingData =
+      buildWeddingData(
+        mergedBody,
+        validation.parsedDate,
+        existingSlug
+      );
+
+    /*
+     * Actualizamos el documento existente.
+     *
+     * createdAt se conserva.
+     * updatedAt se actualizará automáticamente.
+     */
+    wedding.set(
+      weddingData
+    );
+
+    const updatedWedding =
+      await wedding.save();
+
+    return res
+      .status(200)
+      .json(
+        updatedWedding
+      );
+  } catch (error) {
+    console.error(
+      'Error al actualizar boda:',
+      error
+    );
+
+    return sendDatabaseError(
+      res,
+      error,
+      'No fue posible guardar los cambios de la invitación.'
+    );
+  }
+};
+
+/*
+ * =========================================================
+ * ELIMINAR INVITACIÓN
+ * =========================================================
+ */
+
+exports.deleteWedding = async (
+  req,
+  res
+) => {
+  try {
+    const weddingId =
+      cleanText(
+        req.params.id
+      );
+
+    if (
+      !mongoose.isValidObjectId(
+        weddingId
+      )
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            'El identificador del evento no es válido.'
+        });
     }
 
     const wedding =
@@ -686,16 +1070,20 @@ exports.deleteWedding = async (
       );
 
     if (!wedding) {
-      return res.status(404).json({
-        message:
-          'El evento no existe.'
-      });
+      return res
+        .status(404)
+        .json({
+          message:
+            'El evento no existe.'
+        });
     }
 
-    return res.status(200).json({
-      message:
-        'Evento eliminado correctamente.'
-    });
+    return res
+      .status(200)
+      .json({
+        message:
+          'Evento eliminado correctamente.'
+      });
   } catch (error) {
     console.error(
       'Error al eliminar evento:',
