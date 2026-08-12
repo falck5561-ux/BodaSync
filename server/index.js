@@ -11,18 +11,54 @@ const weddingRoutes = require('./routes/weddings');
 
 const app = express();
 
-const PORT =
-  Number(process.env.PORT) || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 const CLIENT_URL =
-  process.env.CLIENT_URL ||
-  'http://localhost:5173';
+  process.env.CLIENT_URL || 'http://localhost:5173';
 
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   CLIENT_URL
 ].filter(Boolean);
+
+let mongoConnectionPromise = null;
+
+/*
+ * =========================================================
+ * MONGODB
+ * =========================================================
+ */
+
+async function connectDatabase() {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  const mongoUri = process.env.MONGO_URI;
+
+  if (!mongoUri) {
+    throw new Error(
+      'Falta MONGO_URI en las variables de entorno.'
+    );
+  }
+
+  if (!mongoConnectionPromise) {
+    mongoConnectionPromise = mongoose
+      .connect(mongoUri)
+      .then(() => {
+        console.log('MongoDB conectado');
+
+        return mongoose.connection;
+      })
+      .catch((error) => {
+        mongoConnectionPromise = null;
+        throw error;
+      });
+  }
+
+  return mongoConnectionPromise;
+}
 
 /*
  * =========================================================
@@ -34,16 +70,14 @@ app.use(
   cors({
     origin(origin, callback) {
       /*
-       * Permitimos peticiones sin Origin,
-       * por ejemplo Postman o herramientas internas.
+       * Permitimos peticiones sin Origin:
+       * navegador directo, Postman, health checks, etc.
        */
       if (!origin) {
         return callback(null, true);
       }
 
-      if (
-        allowedOrigins.includes(origin)
-      ) {
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
@@ -79,22 +113,19 @@ app.use(
 
 /*
  * =========================================================
- * ARCHIVOS SUBIDOS
+ * ARCHIVOS LOCALES LEGACY
  * =========================================================
  *
- * Permite acceder públicamente a:
+ * Se conserva para invitaciones antiguas que todavía
+ * utilicen URLs /uploads.
  *
- * /uploads/images/archivo.jpg
- * /uploads/audio/archivo.mp3
+ * Las nuevas subidas utilizan Cloudinary.
  */
 
 app.use(
   '/uploads',
   express.static(
-    path.join(
-      __dirname,
-      'uploads'
-    )
+    path.join(__dirname, 'uploads')
   )
 );
 
@@ -102,18 +133,22 @@ app.use(
  * =========================================================
  * HEALTH CHECK
  * =========================================================
+ *
+ * No depende de MongoDB.
+ *
+ * Primero queremos comprobar que Vercel realmente
+ * está ejecutando esta aplicación Express.
  */
 
-app.get(
-  '/api/health',
-  (req, res) => {
-    return res.status(200).json({
-      ok: true,
-      message:
-        'BodaSync API funcionando.'
-    });
-  }
-);
+app.get('/api/health', (_req, res) => {
+  return res.status(200).json({
+    ok: true,
+    message: 'BodaSync API funcionando.',
+    environment: process.env.VERCEL
+      ? 'vercel'
+      : 'local'
+  });
+});
 
 /*
  * =========================================================
@@ -128,14 +163,36 @@ app.use(
 
 /*
  * =========================================================
- * LIBRO DE FIRMAS
+ * CONEXIÓN A MONGODB
  * =========================================================
  *
- * GET:
- * /api/weddings/:slug/messages
- *
- * POST:
- * /api/weddings/:slug/messages
+ * Todas las rutas /api/weddings necesitan MongoDB.
+ */
+
+app.use(
+  '/api/weddings',
+  async (_req, res, next) => {
+    try {
+      await connectDatabase();
+      next();
+    } catch (error) {
+      console.error(
+        'Error de conexión a MongoDB:',
+        error
+      );
+
+      return res.status(503).json({
+        message:
+          'No fue posible conectar con la base de datos.'
+      });
+    }
+  }
+);
+
+/*
+ * =========================================================
+ * LIBRO DE FIRMAS
+ * =========================================================
  */
 
 app.use(
@@ -160,14 +217,11 @@ app.use(
  * =========================================================
  */
 
-app.use(
-  (req, res) => {
-    return res.status(404).json({
-      message:
-        'Ruta no encontrada.'
-    });
-  }
-);
+app.use((_req, res) => {
+  return res.status(404).json({
+    message: 'Ruta no encontrada.'
+  });
+});
 
 /*
  * =========================================================
@@ -175,76 +229,57 @@ app.use(
  * =========================================================
  */
 
-app.use(
-  (error, req, res, next) => {
-    console.error(
-      'Error del servidor:',
-      error
-    );
+app.use((error, _req, res, next) => {
+  console.error(
+    'Error del servidor:',
+    error
+  );
 
-    if (res.headersSent) {
-      return next(error);
-    }
-
-    return res
-      .status(
-        error.status || 500
-      )
-      .json({
-        message:
-          error.message ||
-          'Error interno del servidor.'
-      });
+  if (res.headersSent) {
+    return next(error);
   }
-);
+
+  return res
+    .status(error.status || 500)
+    .json({
+      message:
+        error.message ||
+        'Error interno del servidor.'
+    });
+});
 
 /*
  * =========================================================
- * INICIAR SERVIDOR
+ * DESARROLLO LOCAL
  * =========================================================
+ *
+ * Si ejecutamos:
+ *
+ * node index.js
+ *
+ * conectamos MongoDB y abrimos el puerto 5000.
+ *
+ * Cuando Vercel importa este archivo, este bloque
+ * no se ejecuta.
  */
 
-async function startServer() {
-  const mongoUri =
-    process.env.MONGO_URI;
-
-  if (!mongoUri) {
-    console.error(
-      'Falta MONGO_URI en server/.env'
-    );
-
-    process.exit(1);
-  }
-
+async function startLocalServer() {
   try {
-    await mongoose.connect(
-      mongoUri
-    );
+    await connectDatabase();
 
-    console.log(
-      'MongoDB conectado'
-    );
+    app.listen(PORT, () => {
+      console.log(
+        `Servidor funcionando en http://localhost:${PORT}`
+      );
 
-    app.listen(
-      PORT,
-      () => {
-        console.log(
-          `Servidor funcionando en http://localhost:${PORT}`
-        );
+      console.log(
+        `Health: http://localhost:${PORT}/api/health`
+      );
 
-        console.log(
-          `Uploads: http://localhost:${PORT}/uploads`
-        );
-
-        console.log(
-          `API de bodas: http://localhost:${PORT}/api/weddings`
-        );
-
-        console.log(
-          `Libro de firmas: http://localhost:${PORT}/api/weddings/:slug/messages`
-        );
-      }
-    );
+      console.log(
+        `API de bodas: http://localhost:${PORT}/api/weddings`
+      );
+    });
   } catch (error) {
     console.error(
       'No fue posible iniciar el servidor:',
@@ -255,4 +290,14 @@ async function startServer() {
   }
 }
 
-void startServer();
+if (require.main === module) {
+  void startLocalServer();
+}
+
+/*
+ * =========================================================
+ * VERCEL
+ * =========================================================
+ */
+
+module.exports = app;
