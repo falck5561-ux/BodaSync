@@ -13,14 +13,32 @@ const app = express();
 
 const PORT = Number(process.env.PORT) || 5000;
 
-const CLIENT_URL =
-  process.env.CLIENT_URL || 'http://localhost:5173';
+function normalizeOrigin(value) {
+  let normalized = String(value || '').trim();
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  CLIENT_URL
-].filter(Boolean);
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  return normalized.replace(/\/+$/, '');
+}
+
+const CLIENT_URL = normalizeOrigin(
+  process.env.CLIENT_URL || 'http://localhost:5173'
+);
+
+const allowedOrigins = new Set(
+  [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    CLIENT_URL
+  ]
+    .map(normalizeOrigin)
+    .filter(Boolean)
+);
 
 let mongoConnectionPromise = null;
 
@@ -70,22 +88,36 @@ app.use(
   cors({
     origin(origin, callback) {
       /*
-       * Permitimos peticiones sin Origin:
+       * Peticiones sin Origin:
        * navegador directo, Postman, health checks, etc.
        */
       if (!origin) {
         return callback(null, true);
       }
 
-      if (allowedOrigins.includes(origin)) {
+      const normalizedOrigin = normalizeOrigin(origin);
+
+      if (allowedOrigins.has(normalizedOrigin)) {
         return callback(null, true);
       }
 
-      return callback(
-        new Error(
-          `Origen no permitido por CORS: ${origin}`
-        )
+      console.error(
+        'Origen rechazado por CORS:',
+        normalizedOrigin
       );
+
+      console.error(
+        'Orígenes permitidos:',
+        Array.from(allowedOrigins)
+      );
+
+      const error = new Error(
+        `Origen no permitido por CORS: ${normalizedOrigin}`
+      );
+
+      error.status = 403;
+
+      return callback(error);
     },
 
     credentials: true
@@ -116,9 +148,6 @@ app.use(
  * ARCHIVOS LOCALES LEGACY
  * =========================================================
  *
- * Se conserva para invitaciones antiguas que todavía
- * utilicen URLs /uploads.
- *
  * Las nuevas subidas utilizan Cloudinary.
  */
 
@@ -133,11 +162,6 @@ app.use(
  * =========================================================
  * HEALTH CHECK
  * =========================================================
- *
- * No depende de MongoDB.
- *
- * Primero queremos comprobar que Vercel realmente
- * está ejecutando esta aplicación Express.
  */
 
 app.get('/api/health', (_req, res) => {
@@ -163,10 +187,8 @@ app.use(
 
 /*
  * =========================================================
- * CONEXIÓN A MONGODB
+ * CONEXIÓN A MONGODB PARA BODAS
  * =========================================================
- *
- * Todas las rutas /api/weddings necesitan MongoDB.
  */
 
 app.use(
@@ -174,6 +196,7 @@ app.use(
   async (_req, res, next) => {
     try {
       await connectDatabase();
+
       next();
     } catch (error) {
       console.error(
@@ -252,15 +275,6 @@ app.use((error, _req, res, next) => {
  * =========================================================
  * DESARROLLO LOCAL
  * =========================================================
- *
- * Si ejecutamos:
- *
- * node index.js
- *
- * conectamos MongoDB y abrimos el puerto 5000.
- *
- * Cuando Vercel importa este archivo, este bloque
- * no se ejecuta.
  */
 
 async function startLocalServer() {
@@ -278,6 +292,11 @@ async function startLocalServer() {
 
       console.log(
         `API de bodas: http://localhost:${PORT}/api/weddings`
+      );
+
+      console.log(
+        'Orígenes CORS permitidos:',
+        Array.from(allowedOrigins)
       );
     });
   } catch (error) {
