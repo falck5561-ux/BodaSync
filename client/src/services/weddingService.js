@@ -1,5 +1,10 @@
 const DEFAULT_SERVER_URL = 'http://localhost:5000';
 
+const ADMIN_TOKEN_STORAGE_KEY =
+  'bodasync:admin-google-id-token:v1';
+
+let adminAuthToken = '';
+
 function cleanText(value) {
   if (typeof value !== 'string') {
     return '';
@@ -29,16 +34,141 @@ function getApiBaseUrl() {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+/*
+ * =========================================================
+ * AUTENTICACIÓN ADMINISTRATIVA
+ * =========================================================
+ *
+ * El token de Google se conserva únicamente durante
+ * la sesión actual del navegador.
+ *
+ * El componente de login llamará:
+ *
+ * setAdminAuthToken(response.credential)
+ *
+ * y todas las peticiones administrativas comenzarán
+ * automáticamente a enviar:
+ *
+ * Authorization: Bearer <google-id-token>
+ */
+
+function getSessionStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminAuthToken(token) {
+  const normalizedToken =
+    cleanText(token);
+
+  adminAuthToken = normalizedToken;
+
+  const storage =
+    getSessionStorage();
+
+  if (!storage) {
+    return normalizedToken;
+  }
+
+  try {
+    if (normalizedToken) {
+      storage.setItem(
+        ADMIN_TOKEN_STORAGE_KEY,
+        normalizedToken
+      );
+    } else {
+      storage.removeItem(
+        ADMIN_TOKEN_STORAGE_KEY
+      );
+    }
+  } catch {
+    // Si sessionStorage no está disponible,
+    // conservamos el token solamente en memoria.
+  }
+
+  return normalizedToken;
+}
+
+export function getAdminAuthToken() {
+  if (adminAuthToken) {
+    return adminAuthToken;
+  }
+
+  const storage =
+    getSessionStorage();
+
+  if (!storage) {
+    return '';
+  }
+
+  try {
+    const storedToken =
+      cleanText(
+        storage.getItem(
+          ADMIN_TOKEN_STORAGE_KEY
+        )
+      );
+
+    if (storedToken) {
+      adminAuthToken = storedToken;
+    }
+
+    return storedToken;
+  } catch {
+    return '';
+  }
+}
+
+export function clearAdminAuthToken() {
+  adminAuthToken = '';
+
+  const storage =
+    getSessionStorage();
+
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(
+      ADMIN_TOKEN_STORAGE_KEY
+    );
+  } catch {
+    // No necesitamos hacer nada más.
+  }
+}
+
+export function hasAdminAuthToken() {
+  return Boolean(
+    getAdminAuthToken()
+  );
+}
+
+/*
+ * =========================================================
+ * ERRORES
+ * =========================================================
+ */
+
 export class WeddingServiceError extends Error {
   constructor(message, options = {}) {
     super(message);
 
     this.name = 'WeddingServiceError';
 
-    this.status = options.status || 0;
+    this.status =
+      options.status || 0;
 
     this.code =
-      options.code || 'WEDDING_SERVICE_ERROR';
+      options.code ||
+      'WEDDING_SERVICE_ERROR';
 
     this.details =
       options.details || null;
@@ -53,7 +183,9 @@ export class WeddingServiceError extends Error {
 
 async function parseResponse(response) {
   const contentType =
-    response.headers.get('content-type') || '';
+    response.headers.get(
+      'content-type'
+    ) || '';
 
   if (
     contentType.includes(
@@ -89,14 +221,16 @@ function getErrorMessage(
   }
 
   if (
-    typeof data?.message === 'string' &&
+    typeof data?.message ===
+      'string' &&
     data.message.trim()
   ) {
     return data.message.trim();
   }
 
   if (
-    typeof data?.error === 'string' &&
+    typeof data?.error ===
+      'string' &&
     data.error.trim()
   ) {
     return data.error.trim();
@@ -104,6 +238,20 @@ function getErrorMessage(
 
   return fallbackMessage;
 }
+
+/*
+ * =========================================================
+ * REQUEST
+ * =========================================================
+ *
+ * Todas las peticiones pasan por aquí.
+ *
+ * Si existe una sesión administrativa activa,
+ * enviamos automáticamente el token de Google.
+ *
+ * Las rutas públicas funcionan normalmente incluso
+ * si no existe token.
+ */
 
 async function request(
   endpoint,
@@ -125,11 +273,28 @@ async function request(
     ...headers
   };
 
+  const authToken =
+    getAdminAuthToken();
+
+  const hasAuthorizationHeader =
+    Boolean(
+      requestHeaders.Authorization ||
+      requestHeaders.authorization
+    );
+
+  if (
+    authToken &&
+    !hasAuthorizationHeader
+  ) {
+    requestHeaders.Authorization =
+      `Bearer ${authToken}`;
+  }
+
   /*
    * Cuando mandamos FormData NO debemos
-   * escribir Content-Type manualmente.
+   * establecer Content-Type manualmente.
    *
-   * El navegador genera:
+   * El navegador genera automáticamente:
    *
    * multipart/form-data; boundary=...
    */
@@ -191,6 +356,25 @@ async function request(
         'La información enviada no es válida.';
     }
 
+    if (response.status === 401) {
+      /*
+       * Un 401 significa normalmente que el token
+       * expiró o dejó de ser válido.
+       *
+       * Lo eliminamos para obligar a iniciar
+       * sesión nuevamente.
+       */
+      clearAdminAuthToken();
+
+      fallbackMessage =
+        'Tu sesión de administrador expiró. Inicia sesión nuevamente.';
+    }
+
+    if (response.status === 403) {
+      fallbackMessage =
+        'Esta cuenta no tiene permisos de administrador.';
+    }
+
     if (response.status === 404) {
       fallbackMessage =
         'No se encontró la información solicitada.';
@@ -223,7 +407,12 @@ async function request(
       ),
       {
         status: response.status,
-        code: 'REQUEST_FAILED',
+        code:
+          response.status === 401
+            ? 'AUTH_REQUIRED'
+            : response.status === 403
+              ? 'AUTH_FORBIDDEN'
+              : 'REQUEST_FAILED',
         details: data
       }
     );
@@ -283,7 +472,9 @@ function getUrlFromMediaItem(
     return '';
   }
 
-  if (typeof mediaItem === 'string') {
+  if (
+    typeof mediaItem === 'string'
+  ) {
     return cleanText(mediaItem);
   }
 
@@ -332,23 +523,6 @@ function hasFilesInFormData(
  * =========================================================
  * NORMALIZAR MEDIA DEL SERVIDOR
  * =========================================================
- *
- * Acepta distintas estructuras:
- *
- * {
- *   media: {...}
- * }
- *
- * {
- *   data: {
- *     media: {...}
- *   }
- * }
- *
- * {
- *   coverImage: "...",
- *   musicUrl: "..."
- * }
  */
 
 function normalizeUploadedMedia(
@@ -390,14 +564,6 @@ function normalizeUploadedMedia(
         source.couple ||
         ''
     );
-
-  /*
-   * Aceptamos tanto:
-   *
-   * backgroundMusic
-   * musicUrl
-   * music
-   */
 
   const backgroundMusic =
     cleanText(
@@ -444,17 +610,8 @@ function normalizeUploadedMedia(
   return {
     coverImage,
     coupleImage,
-
-    /*
-     * Conservamos ambos nombres.
-     *
-     * Esto facilita la compatibilidad entre
-     * admin, payload, servidor y LandingPage.
-     */
-
     backgroundMusic,
     musicUrl: backgroundMusic,
-
     gallery
   };
 }
@@ -463,9 +620,6 @@ function normalizeUploadedMedia(
  * =========================================================
  * MEDIA YA EXISTENTE
  * =========================================================
- *
- * Si el administrador ya contiene URLs en lugar
- * de File, no debemos perderlas.
  */
 
 function getExistingMediaUrls(
@@ -512,11 +666,6 @@ function getExistingMediaUrls(
  * =========================================================
  * COMBINAR MEDIA
  * =========================================================
- *
- * La media recién subida tiene prioridad.
- *
- * Si algún archivo no fue reemplazado,
- * conservamos la URL previa.
  */
 
 function mergeMedia(
@@ -583,35 +732,6 @@ function mergeMedia(
  * =========================================================
  * SUBIR FOTOGRAFÍAS Y MÚSICA
  * =========================================================
- *
- * Campos enviados:
- *
- * coverImage
- * coupleImage
- * gallery
- * backgroundMusic
- *
- * Endpoint:
- *
- * POST /api/uploads
- *
- * IMPORTANTE:
- *
- * Esta función devuelve:
- *
- * {
- *   media: {
- *     coverImage,
- *     coupleImage,
- *     backgroundMusic,
- *     musicUrl,
- *     gallery
- *   }
- * }
- *
- * porque useWeddingBuilder espera:
- *
- * uploadResponse.media
  */
 
 export async function uploadWeddingMedia(
@@ -621,16 +741,8 @@ export async function uploadWeddingMedia(
   const formData =
     new FormData();
 
-  /*
-   * Conservamos URLs que ya existan.
-   */
-
   const existingMedia =
     getExistingMediaUrls(media);
-
-  /*
-   * Archivos nuevos.
-   */
 
   const coverImage =
     getFileFromMediaItem(
@@ -692,13 +804,8 @@ export async function uploadWeddingMedia(
     });
 
   /*
-   * =======================================================
-   * SIN ARCHIVOS NUEVOS
-   * =======================================================
-   *
-   * useWeddingBuilder espera siempre:
-   *
-   * uploadResponse.media
+   * Si no hay archivos nuevos,
+   * devolvemos las URLs existentes.
    */
 
   if (
@@ -708,12 +815,6 @@ export async function uploadWeddingMedia(
       media: existingMedia
     };
   }
-
-  /*
-   * =======================================================
-   * SUBIDA
-   * =======================================================
-   */
 
   const response =
     await request(
@@ -729,11 +830,6 @@ export async function uploadWeddingMedia(
     normalizeUploadedMedia(
       response
     );
-
-  /*
-   * Si existe una URL anterior y determinado
-   * archivo no fue reemplazado, la conservamos.
-   */
 
   const finalMedia =
     mergeMedia(
@@ -763,7 +859,8 @@ export async function createWedding(
     throw new WeddingServiceError(
       'No se proporcionó la información de la invitación.',
       {
-        code: 'INVALID_WEDDING_DATA'
+        code:
+          'INVALID_WEDDING_DATA'
       }
     );
   }
@@ -782,12 +879,6 @@ export async function createWedding(
  * =========================================================
  * ACTUALIZAR INVITACIÓN
  * =========================================================
- *
- * PUT /api/weddings/:id
- *
- * Esta función NO crea una invitación nueva.
- * Actualiza el documento existente y mantiene
- * el mismo slug público.
  */
 
 export async function updateWedding(
@@ -804,7 +895,8 @@ export async function updateWedding(
     throw new WeddingServiceError(
       'No se proporcionó el identificador de la invitación.',
       {
-        code: 'INVALID_WEDDING_ID'
+        code:
+          'INVALID_WEDDING_ID'
       }
     );
   }
@@ -817,7 +909,8 @@ export async function updateWedding(
     throw new WeddingServiceError(
       'No se proporcionó la información que deseas actualizar.',
       {
-        code: 'INVALID_WEDDING_DATA'
+        code:
+          'INVALID_WEDDING_DATA'
       }
     );
   }
@@ -838,6 +931,9 @@ export async function updateWedding(
  * =========================================================
  * OBTENER TODAS LAS INVITACIONES
  * =========================================================
+ *
+ * Ruta administrativa.
+ * El token se añade automáticamente por request().
  */
 
 export async function getWeddings(
@@ -855,6 +951,8 @@ export async function getWeddings(
  * =========================================================
  * OBTENER INVITACIÓN POR SLUG
  * =========================================================
+ *
+ * Esta ruta permanece pública en el backend.
  */
 
 export async function getWeddingBySlug(
@@ -868,7 +966,8 @@ export async function getWeddingBySlug(
     throw new WeddingServiceError(
       'No se proporcionó el identificador de la invitación.',
       {
-        code: 'INVALID_WEDDING_SLUG'
+        code:
+          'INVALID_WEDDING_SLUG'
       }
     );
   }
@@ -902,7 +1001,8 @@ export async function deleteWedding(
     throw new WeddingServiceError(
       'No se proporcionó el identificador de la invitación.',
       {
-        code: 'INVALID_WEDDING_ID'
+        code:
+          'INVALID_WEDDING_ID'
       }
     );
   }
@@ -964,6 +1064,11 @@ export function getWeddingServiceErrorMessage(
 
 const weddingService = {
   API_BASE_URL,
+
+  setAdminAuthToken,
+  getAdminAuthToken,
+  clearAdminAuthToken,
+  hasAdminAuthToken,
 
   uploadWeddingMedia,
 

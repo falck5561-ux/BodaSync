@@ -8,23 +8,46 @@ const {
   deleteWedding
 } = require('../controllers/weddingController');
 
+const {
+  requireAdmin
+} = require('../middleware/requireAdmin');
+
 const router = express.Router();
 
 /*
  * =========================================================
  * CREAR INVITACIÓN
  * =========================================================
+ *
+ * POST /api/weddings
+ *
+ * Solo administrador.
  */
 
-router.post('/', createWedding);
+router.post(
+  '/',
+  requireAdmin,
+  createWedding
+);
 
 /*
  * =========================================================
  * LISTAR INVITACIONES
  * =========================================================
+ *
+ * GET /api/weddings
+ *
+ * Esta ruta muestra todas las invitaciones dentro
+ * del panel administrativo.
+ *
+ * Solo administrador.
  */
 
-router.get('/', getWeddings);
+router.get(
+  '/',
+  requireAdmin,
+  getWeddings
+);
 
 /*
  * =========================================================
@@ -33,26 +56,52 @@ router.get('/', getWeddings);
  *
  * PUT /api/weddings/:id
  *
- * Permitirá editar una boda existente sin generar
- * un nuevo slug ni una invitación duplicada.
+ * Edita una invitación existente conservando
+ * su slug y URL pública.
+ *
+ * Solo administrador.
  */
 
-router.put('/:id', updateWedding);
+router.put(
+  '/:id',
+  requireAdmin,
+  updateWedding
+);
 
 /*
  * =========================================================
  * CONSULTAR INVITACIÓN PÚBLICA
  * =========================================================
+ *
+ * GET /api/weddings/:slug
+ *
+ * Esta ruta debe permanecer pública para que cualquier
+ * invitado pueda abrir:
+ *
+ * /boda/:slug
+ *
+ * No requiere iniciar sesión.
  */
 
-router.get('/:slug', getWeddingBySlug);
+router.get(
+  '/:slug',
+  getWeddingBySlug
+);
 
 /*
  * =========================================================
  * ELIMINAR INVITACIÓN
  * =========================================================
+ *
+ * DELETE /api/weddings/:id
+ *
+ * Solo administrador.
  */
 
-router.delete('/:id', deleteWedding);
+router.delete(
+  '/:id',
+  requireAdmin,
+  deleteWedding
+);
 
 module.exports = router;

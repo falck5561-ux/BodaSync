@@ -142,9 +142,6 @@ export default function DashboardSidebar({
     'Gestión de invitaciones'
   );
 
-  const brandInitial =
-    safeBusinessName.charAt(0).toUpperCase() || 'B';
-
   function handleSectionChange(sectionKey) {
     if (typeof onSectionChange === 'function') {
       onSectionChange(sectionKey);
@@ -177,9 +174,20 @@ export default function DashboardSidebar({
                 ? safeBusinessName
                 : undefined
             }
-            aria-hidden="true"
           >
-            {brandInitial}
+            <img
+              src="/images/bodasync-logo.png"
+              alt=""
+              aria-hidden="true"
+              draggable="false"
+              style={{
+                display: 'block',
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                borderRadius: 'inherit'
+              }}
+            />
           </div>
 
           {!compactSidebar && (
